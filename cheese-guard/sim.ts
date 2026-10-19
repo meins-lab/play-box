@@ -3,6 +3,8 @@ export const COLS = 12;
 export const ROWS = 12;
 export const CELL = 100;
 export const SLICES = 8;
+// 이 라운드까지 버티면 클리어
+export const FINAL_ROUND = 100;
 // 쥐구멍은 위쪽 벽, 치즈는 오른쪽 아래 2×2 칸. 쥐는 고양이를 뛰어넘어 곧장 다녀서, 고양이로 길을 막을 수 없다
 export const HOLE = 1;
 export const CHEESE = [9 + 9 * COLS, 10 + 9 * COLS, 9 + 10 * COLS, 10 + 10 * COLS];
@@ -25,9 +27,9 @@ export const CATS: Record<CatKind, CatSpec> = {
   c3: { name: '달빛 졸린냥', range: 2.8, cd: 0, dmg: 5, slow: 0.6, splash: 0, price: 140, next: [] },
 };
 
-export type Cat = { cell: number; kind: CatKind; cool: number; spent: number; boost: number };
+export type Cat = { cell: number; kind: CatKind; cool: number; spent: number; boost: number; dmgBoost: number };
 
-// 3단계까지 키운 고양이는 계속 더 강해질 수 있다: 공격하는 냥은 공격 속도, 졸린냥은 범위
+// 3단계까지 키운 고양이는 계속 더 강해질 수 있다: 공격하는 냥은 공격 속도와 공격력, 졸린냥은 범위
 export const MAX_BOOST = 10;
 export const canBoost = (cat: Cat) => {
   return cat.kind.endsWith('3') && cat.boost < MAX_BOOST;
@@ -35,10 +37,17 @@ export const canBoost = (cat: Cat) => {
 export const boostPrice = (cat: Cat) => {
   return 100 + 60 * cat.boost;
 };
-// 단계마다 공격 간격 12% 단축, 졸린냥은 범위 0.25칸 증가
+// 공격력 강화는 공격하는 냥만. 졸린냥은 범위 강화 하나뿐이다
+export const canDmgBoost = (cat: Cat) => {
+  return cat.kind.endsWith('3') && !CATS[cat.kind].slow && cat.dmgBoost < MAX_BOOST;
+};
+export const dmgBoostPrice = (cat: Cat) => {
+  return 100 + 60 * cat.dmgBoost;
+};
+// 단계마다 공격 간격 12% 단축, 공격력 1.2배, 졸린냥은 범위 0.25칸 증가
 export const statsOf = (cat: Cat): CatSpec => {
   const s = CATS[cat.kind];
-  return s.slow ? { ...s, range: s.range + 0.25 * cat.boost } : { ...s, cd: s.cd * Math.pow(0.88, cat.boost) };
+  return s.slow ? { ...s, range: s.range + 0.25 * cat.boost } : { ...s, cd: s.cd * Math.pow(0.88, cat.boost), dmg: s.dmg * Math.pow(1.2, cat.dmgBoost) };
 };
 export type MouseKind = 0 | 1 | 2; // 생쥐, 행동대장쥐(빠름), 대장쥐(보스)
 // 한 번에 훔쳐 가는 치즈 조각 수
@@ -49,6 +58,12 @@ export const TIER_ROUNDS = 5;
 const TIER_HP = [1, 1.8, 3.2, 5.5, 9];
 const TIER_SPEED = [1, 1.06, 1.12, 1.18, 1.25];
 const TIER_GOLD = [1, 1.5, 2, 3, 4];
+// 생쥐 체력은 라운드마다 1.15배, 모두 검정이 된 25라운드 뒤로는 1.0625배씩 오른다.
+// 잘 짠 전략으로도 100라운드는 겨우 넘길 만큼(강한 자동 플레이 69판 중 14% 클리어)
+const LATE_FROM = 25;
+const hpScale = (wave: number) => {
+  return Math.pow(1.15, Math.min(wave, LATE_FROM) - 1) * Math.pow(1.0625, Math.max(0, wave - LATE_FROM));
+};
 export const tierFor = (wave: number, i: number) => {
   const top = Math.min(4, Math.floor((wave - 1) / TIER_ROUNDS));
   if (!top) {
@@ -76,7 +91,7 @@ export type World = {
   lost: number;
   kills: number;
   time: number;
-  status: 'playing' | 'over';
+  status: 'playing' | 'over' | 'clear';
   nextId: number;
 };
 
@@ -142,7 +157,7 @@ export const place = (w: World, cell: number) => {
     return false;
   }
   w.gold -= price;
-  w.cats.push({ cell, kind: '0', cool: 0, spent: price, boost: 0 });
+  w.cats.push({ cell, kind: '0', cool: 0, spent: price, boost: 0, dmgBoost: 0 });
   return true;
 };
 
@@ -168,6 +183,17 @@ export const boost = (w: World, cell: number) => {
   return true;
 };
 
+export const dmgBoost = (w: World, cell: number) => {
+  const cat = catAt(w, cell);
+  if (w.status !== 'playing' || !cat || !canDmgBoost(cat) || w.gold < dmgBoostPrice(cat)) {
+    return false;
+  }
+  w.gold -= dmgBoostPrice(cat);
+  cat.spent += dmgBoostPrice(cat);
+  cat.dmgBoost++;
+  return true;
+};
+
 export const refund = (cat: Cat) => {
   return Math.floor(cat.spent * 0.7);
 };
@@ -187,7 +213,7 @@ const spawn = (w: World) => {
   const boss = w.wave % 10 === 0 && i === 1;
   const fast = !boss && w.wave >= 3 && i % 3 === 0;
   const tier = tierFor(w.wave, i);
-  const hp = 6 * Math.pow(1.15, w.wave - 1) * (boss ? 10 : fast ? 0.6 : 1) * TIER_HP[tier];
+  const hp = 6 * hpScale(w.wave) * (boss ? 10 : fast ? 0.6 : 1) * TIER_HP[tier];
   const kind: MouseKind = boss ? 2 : fast ? 1 : 0;
   w.mice.push({
     id: w.nextId++,
@@ -451,5 +477,7 @@ export const step = (w: World, dt: number) => {
   w.fx = w.fx.filter((f) => f.t < 0.6);
   if (w.lost >= SLICES) {
     w.status = 'over';
+  } else if (w.wave >= FINAL_ROUND && !w.toSpawn && !w.mice.length) {
+    w.status = 'clear';
   }
 };

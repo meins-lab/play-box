@@ -1,5 +1,5 @@
 // Run: yarn check — fails if placement rules, paths, stealing, drops, upgrades or the auto-play loop break.
-import { boost, canPlace, CARRY, CATS, CELL, CHEESE, CHEESE_X, CHEESE_Y, COLS, createWorld, cx, cy, HOLE, place, placePrice, MAX_BOOST, ROWS, sell, SLICES, statsOf, step, tierFor, upgrade } from './sim.ts';
+import { boost, canPlace, CARRY, CATS, CELL, CHEESE, CHEESE_X, CHEESE_Y, COLS, createWorld, cx, cy, dmgBoost, FINAL_ROUND, HOLE, place, placePrice, MAX_BOOST, ROWS, sell, SLICES, statsOf, step, tierFor, upgrade } from './sim.ts';
 
 import type { CatKind, World } from './sim.ts';
 
@@ -88,6 +88,27 @@ const conserved = (w: World) => {
     boost(w, a.cell);
   }
   assert(a.boost === MAX_BOOST && !boost(w, a.cell), `boost stops at ${MAX_BOOST}`);
+  const dmg = statsOf(a).dmg;
+  assert(dmgBoost(w, a.cell) && statsOf(a).dmg > dmg && statsOf(a).cd === cd * Math.pow(0.88, MAX_BOOST), 'damage boost raises damage only');
+  for (let i = 1; i < MAX_BOOST; i++) {
+    dmgBoost(w, a.cell);
+  }
+  assert(a.dmgBoost === MAX_BOOST && !dmgBoost(w, a.cell), `damage boost stops at ${MAX_BOOST}`);
+  assert(!dmgBoost(w, c.cell), 'sleepy cats have no damage boost');
+}
+
+// 마지막 라운드의 생쥐가 모두 사라지면 클리어
+{
+  const w = createWorld();
+  w.wave = FINAL_ROUND;
+  w.waveCd = 1e9;
+  step(w, DT);
+  assert(w.status === 'clear', `round ${FINAL_ROUND} cleared`);
+  const before = createWorld();
+  before.wave = FINAL_ROUND - 1;
+  before.waveCd = 1e9;
+  step(before, DT);
+  assert(before.status === 'playing', 'earlier rounds keep going');
 }
 
 // 고양이가 없으면 쥐가 치즈를 훔쳐 가고, 8조각을 다 잃으면 끝난다
