@@ -1,4 +1,4 @@
-import { boost, boostPrice, canBoost, canDmgBoost, canPlace, CATS, CELL, cellAt, CHEESE, COLS, createWorld, cx, cy, CHEESE_X, CHEESE_Y, dmgBoost, dmgBoostPrice, FINAL_ROUND, HOLE, place, placePrice, refund, sell, SLICES, statsOf, step, upgrade } from './sim.ts';
+import { auraOf, boost, boostPrice, canBoost, canDmgBoost, canPlace, CATS, CELL, cellAt, CHEESE, COLS, createWorld, cx, cy, CHEESE_X, CHEESE_Y, dmgBoost, dmgBoostPrice, FINAL_ROUND, HOLE, MAX_BOOST, place, placePrice, refund, sell, SLICES, statsOf, step, upgrade } from './sim.ts';
 
 import type { Cat, CatKind, Mouse, World } from './sim.ts';
 
@@ -19,6 +19,18 @@ const img = (name: string, ext = 'png') => {
   return el;
 };
 const CAT_IMG = Object.fromEntries((Object.keys(CATS) as CatKind[]).map((k) => [k, img(k === '0' ? 'cat-0' : `cat-${k}`)])) as Record<CatKind, HTMLImageElement>;
+// 3단계 고양이는 강화할수록 테두리 색이 바뀐다(생쥐 등급과 같은 흰·주황·빨강, 모두 강화하면 보라)
+const BOOSTED_IMG = Object.fromEntries((['a3', 'b3', 'c3'] as CatKind[]).map((k) => [k, [1, 2, 3].map((t) => img(`cat-${k}-t${t}`))])) as Partial<Record<CatKind, HTMLImageElement[]>>;
+const catImg = (cat: Cat) => {
+  const tiers = BOOSTED_IMG[cat.kind];
+  const done = cat.boost + cat.dmgBoost;
+  if (!tiers || !done) {
+    return CAT_IMG[cat.kind];
+  }
+  // 공격하는 냥은 공격 속도·공격력 합쳐 20번, 졸린냥은 범위 10번이 끝
+  const full = CATS[cat.kind].slow ? MAX_BOOST : MAX_BOOST * 2;
+  return tiers[done >= full ? 2 : done * 2 < full ? 0 : 1];
+};
 // [종류][등급]: 등급마다 테두리 색만 다르다(흰·주황·빨강·보라·검정)
 const MOUSE_IMG = ['mouse', 'mouse-fast', 'mouse-boss'].map((n) => [0, 1, 2, 3, 4].map((t) => img(t ? `${n}-t${t}` : n)));
 const FX_IMG = { cheese: img('cheese'), hole: img('hole'), yarn: img('yarn'), paw: img('paw'), sleepy: img('sleepy'), crumbs: img('crumbs') };
@@ -42,6 +54,8 @@ const save = (key: string, v: string) => {
 
 let world: World;
 let paused = true;
+// 게임 중 일시정지. 멈춘 동안에도 고양이를 놓고 키울 수 있다
+let held = false;
 let ended = false;
 // 기본은 2배속. 버튼을 누를 때마다 2× → 3× → 1× 순서로 바뀐다
 let speed = 2;
@@ -50,6 +64,10 @@ let last = 0;
 let selected = -1;
 let hover = -1;
 let refused: { cell: number; t: number; why: string } | null = null;
+// 순수하게 플레이한 시간(초). 시작 전, 일시정지, 끝난 뒤는 세지 않는다
+let played = 0;
+// 손가락으로 쓰는 기기는 시스템 공유, 아니면 이미지 저장
+const MOBILE = window.matchMedia('(pointer: coarse)').matches && 'share' in navigator;
 let priced: { el: HTMLButtonElement; price: number }[] = [];
 
 const fit = () => {
@@ -80,7 +98,9 @@ const drawCheese = () => {
 };
 
 const drawMouse = (m: Mouse) => {
-  const h = m.kind === 2 ? 118 : m.kind === 1 ? 64 : 68;
+  // 마지막 라운드의 대장쥐는 최후의 대장쥐라 더 크게 그린다
+  const last = m.kind === 2 && world.wave >= FINAL_ROUND;
+  const h = last ? 160 : m.kind === 2 ? 118 : m.kind === 1 ? 64 : 68;
   const bob = Math.sin(world.time * 14 + m.id) * 3;
   sprite(MOUSE_IMG[m.kind][m.tier], m.x, m.y + bob - 6, h, m.face < 0);
   if (m.slow < 1) {
@@ -93,7 +113,7 @@ const drawMouse = (m: Mouse) => {
     sprite(FX_IMG.cheese, m.x + (i % 2 ? 6 : -6) * Math.min(1, i), m.y - h / 2 + bob - 4 - i * 14, 40);
   }
   if (m.hp < m.max) {
-    const w = m.kind === 2 ? 80 : 46;
+    const w = last ? 120 : m.kind === 2 ? 80 : 46;
     const y = m.y + h / 2 - 2;
     ctx.fillStyle = 'rgba(90, 58, 34, 0.35)';
     ctx.fillRect(m.x - w / 2, y, w, 7);
@@ -141,7 +161,7 @@ const draw = () => {
 
   const sel = catAt(selected);
   if (sel) {
-    drawRange(sel.cell, statsOf(sel).range, 'rgba(255, 255, 255, 0.35)');
+    drawRange(sel.cell, statsOf(sel, auraOf(world, sel)).range, 'rgba(255, 255, 255, 0.35)');
   } else if (hover >= 0 && canPlace(world, hover)) {
     drawRange(hover, CATS['0'].range, 'rgba(255, 255, 255, 0.25)');
     ctx.globalAlpha = 0.55;
@@ -157,7 +177,7 @@ const draw = () => {
     if (cat.kind[0] === 'c') {
       ctx.fillStyle = `rgba(160, 190, 255, ${0.12 + Math.sin(world.time * 2) * 0.04})`;
       ctx.beginPath();
-      ctx.arc(cx(cat.cell), cy(cat.cell), statsOf(cat).range * CELL, 0, Math.PI * 2);
+      ctx.arc(cx(cat.cell), cy(cat.cell), statsOf(cat, auraOf(world, cat)).range * CELL, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -166,7 +186,7 @@ const draw = () => {
     ...world.cats.map((cat: Cat) => ({
       y: cy(cat.cell),
       draw: () => {
-        sprite(CAT_IMG[cat.kind], cx(cat.cell), cy(cat.cell) - 4, cat.kind.endsWith('3') ? 104 : 96);
+        sprite(catImg(cat), cx(cat.cell), cy(cat.cell) - 4, cat.kind.endsWith('3') ? 104 : 96);
         if (cat.cell === selected) {
           ctx.strokeStyle = '#fff';
           ctx.lineWidth = 4;
@@ -204,6 +224,15 @@ const draw = () => {
     ctx.globalAlpha = 1;
   }
   // 못 놓은 이유를 칸 위에 잠깐 띄운다
+  if (held) {
+    ctx.fillStyle = 'rgba(90, 58, 34, 0.35)';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    ctx.font = '900 120px -apple-system, "Apple SD Gothic Neo", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('일시정지', SIZE / 2, SIZE / 2);
+  }
   if (refused && performance.now() - refused.t < 1400) {
     const x = Math.min(SIZE - 170, Math.max(170, cx(refused.cell)));
     const y = Math.max(60, cy(refused.cell) - 70);
@@ -226,7 +255,7 @@ const whyNot = (cell: number) => {
 };
 
 const hud = () => {
-  $('wave').textContent = `라운드 ${Math.max(1, world.wave)}/${FINAL_ROUND}`;
+  $('wave').textContent = `${Math.max(1, world.wave)}/${FINAL_ROUND}`;
   $('gold').textContent = String(world.gold);
   $('slices').textContent = `${world.plate + world.drops.reduce((n, d) => n + d.n, 0) + world.mice.reduce((n, m) => n + m.carry, 0)}/${SLICES}`;
 };
@@ -239,11 +268,13 @@ const make = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text =
 };
 
 const stats = (cat: Cat) => {
-  const s = statsOf(cat);
+  const aura = auraOf(world, cat);
+  const s = statsOf(cat, aura);
+  const buff = aura ? ` · 챔피언 응원 ×${aura}` : '';
   if (s.slow) {
-    return `느리게 ${Math.round(s.slow * 100)}% · 초당 ${s.dmg} · 사거리 ${s.range.toFixed(2).replace(/\.?0+$/, '')}`;
+    return `느리게 ${Math.round(s.slow * 100)}% · 초당 ${s.dmg} · 사거리 ${s.range.toFixed(2).replace(/\.?0+$/, '')}${buff}`;
   }
-  return `공격 ${Math.round(s.dmg)} · ${(1 / s.cd).toFixed(1)}회/초 · 사거리 ${s.range}${s.splash ? ' · 주변 함께' : ''}`;
+  return `공격 ${Math.round(s.dmg)} · ${(1 / s.cd).toFixed(1)}회/초 · 사거리 ${s.range}${s.splash ? ' · 주변 함께 · 붙은 고양이 응원' : ''}${buff}`;
 };
 
 // 아래 패널: 고른 고양이가 있으면 업그레이드·판매, 없으면 놓는 법과 다음 고양이 값
@@ -269,7 +300,7 @@ const renderPanel = () => {
   }
   const head = make('div', 'head');
   const icon = make('img', 'icon') as HTMLImageElement;
-  icon.src = CAT_IMG[cat.kind].src;
+  icon.src = catImg(cat).src;
   icon.alt = '';
   const info = make('div', '');
   info.append(make('b', '', cat.boost + cat.dmgBoost ? `${CATS[cat.kind].name} +${cat.boost + cat.dmgBoost}` : CATS[cat.kind].name), make('small', '', stats(cat)));
@@ -301,7 +332,7 @@ const renderPanel = () => {
     }
     const b = make('button', 'up') as HTMLButtonElement;
     const im = make('img', '') as HTMLImageElement;
-    im.src = CAT_IMG[cat.kind].src;
+    im.src = catImg(cat).src;
     im.alt = '';
     const label = make('span', '');
     label.append(make('b', '', `${name} 강화 +${level + 1}`), make('small', '', `🪙 ${price}`));
@@ -340,6 +371,117 @@ const button = (text: string, onClick: () => void) => {
   return b;
 };
 
+const playTime = () => {
+  const t = Math.floor(played);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  return `${h ? `${h}시간 ` : ''}${h || m ? `${m}분 ` : ''}${t % 60}초`;
+};
+
+// 클리어 결과 카드 이미지: 플레이 시간, 잡은 생쥐, 지킨 치즈, 판에 남은 고양이 종류별 수
+const resultImage = () => {
+  const W = 1080;
+  const H = 1350;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d')!;
+  const font = (weight: number, size: number) => {
+    return `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
+  };
+  const fit = (im: HTMLImageElement, x: number, y: number, h: number) => {
+    const w = (h * im.naturalWidth) / im.naturalHeight;
+    g.drawImage(im, x - w / 2, y - h / 2, w, h);
+  };
+  g.fillStyle = '#fff6e0';
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#fffdf6';
+  g.beginPath();
+  g.roundRect(50, 50, W - 100, H - 100, 48);
+  g.fill();
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  fit(PLATE_IMG[world.plate], W / 2, 210, 220);
+  g.fillStyle = INK;
+  g.font = font(900, 84);
+  g.fillText(`${FINAL_ROUND}라운드 클리어!`, W / 2, 400);
+  g.fillStyle = '#8d7462';
+  g.font = font(700, 38);
+  g.fillText('Cheese Guard', W / 2, 470);
+
+  const kept = world.plate + world.drops.reduce((n, d) => n + d.n, 0);
+  const stats: [string, string][] = [
+    ['플레이 시간', playTime()],
+    ['잡은 생쥐', `${world.kills}마리`],
+    ['지킨 치즈', `${kept}/${SLICES}`],
+  ];
+  stats.forEach(([label, value], i) => {
+    const x = 90 + i * 300;
+    g.fillStyle = '#fdf0cf';
+    g.beginPath();
+    g.roundRect(x, 540, 280, 160, 28);
+    g.fill();
+    g.fillStyle = '#8d7462';
+    g.font = font(700, 32);
+    g.fillText(label, x + 140, 590);
+    g.fillStyle = INK;
+    g.font = font(900, value.length > 8 ? 36 : 46);
+    g.fillText(value, x + 140, 650);
+  });
+
+  g.fillStyle = INK;
+  g.font = font(800, 40);
+  g.fillText('함께한 고양이', W / 2, 780);
+  const kinds = (Object.keys(CATS) as CatKind[]).map((k) => [k, world.cats.filter((cat) => cat.kind === k).length] as const).filter(([, n]) => n);
+  // 한 줄에 5종, 최대 2줄
+  kinds.forEach(([k, n], i) => {
+    const row = Math.floor(i / 5);
+    const inRow = Math.min(5, kinds.length - row * 5);
+    const x = W / 2 + (i % 5 - (inRow - 1) / 2) * 184;
+    const y = 900 + row * 200;
+    fit(CAT_IMG[k], x, y, 110);
+    g.fillStyle = INK;
+    g.font = font(900, 38);
+    g.fillText(`× ${n}`, x, y + 82);
+  });
+  g.fillStyle = '#8d7462';
+  g.font = font(700, 32);
+  g.fillText('play-box.cloud/cheese-guard', W / 2, H - 100);
+  return new Promise<Blob | null>((resolve) => {
+    c.toBlob(resolve, 'image/png');
+  });
+};
+
+const saveFile = (blob: Blob, name: string) => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+  }, 1000);
+};
+
+const shareResult = async () => {
+  const blob = await resultImage();
+  if (!blob) {
+    return;
+  }
+  const file = new File([blob], 'cheese-guard-clear.png', { type: 'image/png' });
+  if (!MOBILE) {
+    saveFile(blob, file.name);
+    return;
+  }
+  const text = `Cheese Guard ${FINAL_ROUND}라운드 클리어! 플레이 시간 ${playTime()}`;
+  // 이미지를 같이 보낼 수 없는 기기에서는 글과 링크만 공유한다. 사용자가 공유를 닫으면 아무것도 안 한다
+  const data: ShareData = navigator.canShare?.({ files: [file] }) ? { files: [file], text } : { text, url: 'https://play-box.cloud/cheese-guard/' };
+  try {
+    await navigator.share(data);
+  } catch {
+    // 공유 창을 닫은 경우
+  }
+};
+
 const end = () => {
   ended = true;
   const best = Number(read(BEST_KEY)) || 0;
@@ -351,11 +493,16 @@ const end = () => {
   hero.alt = '';
   if (world.status === 'clear') {
     hero.src = CAT_IMG.a3.src;
+    const share = make('button', 'ghost', MOBILE ? '공유하기' : '결과 이미지 저장');
+    share.addEventListener('click', () => {
+      void shareResult();
+    });
     showCard(
       hero,
       make('h2', 'title', `${FINAL_ROUND}라운드 클리어!`),
       make('p', 'sub', `치즈 ${world.plate + world.drops.reduce((n, d) => n + d.n, 0)}조각을 끝까지 지켰어요`),
-      make('p', 'sub small', `잡은 생쥐 ${world.kills}마리`),
+      make('p', 'sub small', `플레이 시간 ${playTime()} · 잡은 생쥐 ${world.kills}마리`),
+      share,
       button('다시 하기', () => {
         start();
       }),
@@ -365,7 +512,7 @@ const end = () => {
   hero.src = MOUSE_IMG[2][0].src;
   showCard(
     hero,
-    make('h2', 'title', '치즈를 모두 빼앗겼어요'),
+    make('h2', 'title', world.bossEscaped ? '최후의 대장쥐를 놓쳤어요' : '치즈를 모두 빼앗겼어요'),
     make('p', 'sub', record ? `라운드 ${world.wave}까지 버텼어요 · 새 최고 기록!` : `라운드 ${world.wave}까지 버텼어요 · 최고 라운드 ${best}`),
     make('p', 'sub small', `잡은 생쥐 ${world.kills}마리`),
     button('다시 하기', () => {
@@ -384,7 +531,7 @@ const showReady = () => {
     ['고양이', '치즈냥·뚱냥·졸린냥으로 키우기, 팔기'],
     ['생쥐', '고양이를 뛰어넘어 와서 치즈를 들고 도망쳐요. 행동대장쥐는 2조각, 대장쥐는 3조각'],
     ['떨어진 치즈', '도망치던 생쥐를 잡으면 떨어져요. 8초 뒤 접시로 돌아가요'],
-    ['목표', `${FINAL_ROUND}라운드까지 버티면 클리어`],
+    ['목표', `${FINAL_ROUND}라운드 최후의 대장쥐를 잡으면 클리어. 놓치면 바로 져요`],
   ]) {
     const li = make('li', '');
     li.append(make('b', '', k), v);
@@ -407,6 +554,8 @@ const showReady = () => {
 const start = () => {
   world = createWorld();
   paused = true;
+  played = 0;
+  setHeld(false);
   ended = false;
   selected = -1;
   renderPanel();
@@ -414,12 +563,16 @@ const start = () => {
 };
 
 const loop = (ts: number) => {
-  acc += Math.min(0.1, (ts - (last || ts)) / 1000) * speed;
+  const real = Math.min(0.1, (ts - (last || ts)) / 1000);
+  acc += real * speed;
+  if (!paused && !held && world.status === 'playing') {
+    played += real;
+  }
   last = ts;
   const gold = world.gold;
   while (acc >= DT) {
     acc -= DT;
-    if (!paused) {
+    if (!paused && !held) {
       step(world, DT);
     }
   }
@@ -465,6 +618,16 @@ $('speed').addEventListener('click', () => {
   speed = (speed % 3) + 1;
   $('speed').textContent = `${speed}×`;
 });
+const setHeld = (on: boolean) => {
+  held = on;
+  $('pause').textContent = on ? '▶' : '⏸';
+  $('pause').setAttribute('aria-label', on ? '계속하기' : '일시정지');
+};
+$('pause').addEventListener('click', () => {
+  if (!paused && world.status === 'playing') {
+    setHeld(!held);
+  }
+});
 $('restart').addEventListener('click', () => {
   start();
 });
@@ -472,6 +635,6 @@ window.addEventListener('resize', fit);
 
 fit();
 start();
-Promise.all([...Object.values(CAT_IMG), ...MOUSE_IMG.flat(), ...Object.values(FX_IMG), ...PLATE_IMG, FLOOR].map((im) => im.decode().catch(() => undefined))).then(() => {
+Promise.all([...Object.values(CAT_IMG), ...Object.values(BOOSTED_IMG).flat(), ...MOUSE_IMG.flat(), ...Object.values(FX_IMG), ...PLATE_IMG, FLOOR].map((im) => im.decode().catch(() => undefined))).then(() => {
   requestAnimationFrame(loop);
 });

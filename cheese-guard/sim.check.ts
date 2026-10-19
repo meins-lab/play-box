@@ -1,5 +1,5 @@
 // Run: yarn check — fails if placement rules, paths, stealing, drops, upgrades or the auto-play loop break.
-import { boost, canPlace, CARRY, CATS, CELL, CHEESE, CHEESE_X, CHEESE_Y, COLS, createWorld, cx, cy, dmgBoost, FINAL_ROUND, HOLE, place, placePrice, MAX_BOOST, ROWS, sell, SLICES, statsOf, step, tierFor, upgrade } from './sim.ts';
+import { auraOf, boost, canPlace, CARRY, CATS, CELL, CHEESE, CHEESE_X, CHEESE_Y, COLS, createWorld, cx, cy, dmgBoost, FINAL_ROUND, HOLE, place, placePrice, MAX_BOOST, ROUND_TIME, slowFor, ROWS, sell, SLICES, statsOf, step, tierFor, tierStep, upgrade } from './sim.ts';
 
 import type { CatKind, World } from './sim.ts';
 
@@ -97,6 +97,76 @@ const conserved = (w: World) => {
   assert(!dmgBoost(w, c.cell), 'sleepy cats have no damage boost');
 }
 
+// 챔피언 뚱냥은 상하좌우로 붙은 고양이를 응원한다: 하나마다 공격 속도 강화 1번, 공격력 강화 0.5번만큼. 최대 4겹
+{
+  const w = createWorld();
+  w.gold = 1e6;
+  const mid = 5 + 5 * COLS;
+  place(w, mid);
+  for (const k of ['a1', 'a2', 'a3'] as CatKind[]) {
+    upgrade(w, mid, k);
+  }
+  const a = w.cats[0];
+  const base = statsOf(a, auraOf(w, a));
+  const champ = (cell: number) => {
+    place(w, cell);
+    for (const k of ['b1', 'b2', 'b3'] as CatKind[]) {
+      upgrade(w, cell, k);
+    }
+  };
+  champ(mid + 1);
+  const one = statsOf(a, auraOf(w, a));
+  assert(auraOf(w, a) === 1 && one.cd === base.cd * 0.88 && one.dmg === base.dmg * Math.sqrt(1.2), 'one champion = +1 speed, +0.5 damage');
+  champ(mid - 1);
+  champ(mid - COLS);
+  champ(mid + COLS);
+  champ(mid + COLS + 1);
+  assert(auraOf(w, a) === 4, 'diagonal champions do not count, four at most');
+  assert(auraOf(w, w.cats.find((c) => c.cell === mid + 1)!) === 1, 'champions cheer each other too');
+  // 줄 끝 칸과 다음 줄 첫 칸은 붙어 있지 않다
+  const edge = 11 + 7 * COLS;
+  place(w, edge);
+  champ(edge + 1);
+  assert(auraOf(w, w.cats.find((c) => c.cell === edge)!) === 0, 'no wrap across rows');
+}
+
+// 등급 시계: 보통 시간에 끝내면 1라운드, 빠르면 더, 느리면 덜. 0.6~1.4 사이
+{
+  const usual = ROUND_TIME[11];
+  assert(tierStep(12, usual) === 1, 'usual time moves one round');
+  assert(tierStep(12, usual * 0.9) > 1.2 && tierStep(12, usual * 1.1) < 0.85, 'faster clears move the clock further');
+  assert(tierStep(12, 1) === 1.4 && tierStep(12, 1e6) === 0.6, 'clock step is clamped');
+  assert(tierStep(FINAL_ROUND + 5, 50) > 0, 'rounds past the table use the last time');
+  // 라운드를 끝내면 걸린 시간만큼 시계가 간다
+  const w = createWorld();
+  w.wave = 12;
+  w.roundStart = 0;
+  w.time = usual * 0.8;
+  w.waveCd = 1e9;
+  step(w, DT);
+  assert(w.tierClock === 1 + tierStep(12, usual * 0.8 + DT) && w.roundStart === -1, 'clearing a round advances the tier clock');
+}
+
+// 슬로우는 겹쳐도 가장 센 것 하나만. 회흑 생쥐는 생쥐 15%, 행동대장쥐 25%, 대장쥐 40%를 버틴다
+{
+  const w = createWorld();
+  w.gold = 1e6;
+  w.waveCd = 1e9;
+  for (const cell of [5 + 5 * COLS, 6 + 5 * COLS]) {
+    place(w, cell);
+    for (const k of ['c1', 'c2', 'c3'] as CatKind[]) {
+      upgrade(w, cell, k);
+    }
+  }
+  const mouse = (id: number, kind: 0 | 1 | 2, tier: number) => ({ id, x: 600, y: 550, hp: 1e9, max: 1e9, speed: 0, kind, tier, carry: 0, leave: false, path: [], slow: 1, face: 1 as const });
+  w.mice.push(mouse(1, 0, 3), mouse(2, 0, 4), mouse(3, 1, 4), mouse(4, 2, 4));
+  step(w, DT);
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  assert(near(w.mice[0].slow, 1 - CATS.c3.slow), 'overlapping sleepy cats do not stack');
+  assert(near(w.mice[1].slow, 1 - CATS.c3.slow * 0.85) && near(w.mice[2].slow, 1 - CATS.c3.slow * 0.75) && near(w.mice[3].slow, 1 - CATS.c3.slow * 0.6), 'black mice resist 15/25/40%');
+  assert(slowFor(w.mice[0], 0.5) === 0.5, 'other tiers take the full slow');
+}
+
 // 마지막 라운드의 생쥐가 모두 사라지면 클리어
 {
   const w = createWorld();
@@ -109,6 +179,19 @@ const conserved = (w: World) => {
   before.waveCd = 1e9;
   step(before, DT);
   assert(before.status === 'playing', 'earlier rounds keep going');
+}
+
+// 최후의 대장쥐가 쥐구멍으로 돌아가면 치즈가 남아 있어도 진다. 다른 라운드 대장쥐는 아니다
+for (const wave of [FINAL_ROUND - 10, FINAL_ROUND]) {
+  const w = createWorld();
+  w.wave = wave;
+  w.waveCd = 1e9;
+  // 한 조각만 들고 도망쳐도 마찬가지
+  w.plate = SLICES - 1;
+  w.mice.push({ id: 1, x: 150, y: 14, hp: 1e9, max: 1e9, speed: 60, kind: 2, tier: 0, carry: 1, leave: false, path: [], slow: 1, face: 1 });
+  step(w, DT);
+  const last = wave === FINAL_ROUND;
+  assert(w.status === (last ? 'over' : 'playing') && w.bossEscaped === last && w.lost === 1, last ? 'the final boss escaping loses the game' : 'earlier bosses escaping do not');
 }
 
 // 고양이가 없으면 쥐가 치즈를 훔쳐 가고, 8조각을 다 잃으면 끝난다
@@ -141,6 +224,62 @@ const conserved = (w: World) => {
   assert(w.plate === SLICES && !w.drops.length, 'an untouched slice returns to the plate');
 }
 
+// 떨어진 조각은 빈손 생쥐의 목표가 된다: 접시보다 가까우면 접시 대신 조각을 주우러 간다
+{
+  const w = createWorld();
+  w.waveCd = 1e9;
+  w.plate = SLICES - 1;
+  w.drops.push({ x: 500, y: 500, t: 0, n: 1 });
+  // 조각에서 300px, 접시에서 그보다 먼 곳에서 출발
+  w.mice.push({ id: 7, x: 200, y: 500, hp: 1e9, max: 1e9, speed: 120, kind: 0, tier: 0, carry: 0, leave: false, path: [{ x: 100, y: 1100 }], slow: 1, face: 1 });
+  for (let i = 0; i < 4 / DT && !w.mice[0].carry; i++) {
+    step(w, DT);
+  }
+  assert(w.mice[0].carry === 1 && w.plate === SLICES - 1 && !w.drops.length && conserved(w), 'an empty-handed mouse runs to the dropped slice');
+  // 접시가 비어 돌아가던 생쥐도 떨어진 조각이 생기면 주우러 간다
+  const v = createWorld();
+  v.waveCd = 1e9;
+  v.plate = 0;
+  v.lost = SLICES - 1;
+  v.drops.push({ x: 900, y: 900, t: 0, n: 1 });
+  v.mice.push({ id: 8, x: 600, y: 600, hp: 1e9, max: 1e9, speed: 120, kind: 0, tier: 0, carry: 0, leave: true, path: [], slow: 1, face: 1 });
+  for (let i = 0; i < 6 / DT && !v.mice[0].carry; i++) {
+    step(v, DT);
+  }
+  assert(v.mice[0].carry === 1 && conserved(v), 'a leaving mouse turns back for a dropped slice');
+}
+
+// 접시가 비면 치즈로 가던 빈손 생쥐도 곧장 집으로 돌아선다
+{
+  const w = createWorld();
+  w.waveCd = 1e9;
+  // 조각 수는 맞추지 않는다. 접시가 비었는지만 본다
+  w.plate = 0;
+  w.mice.push({ id: 9, x: 600, y: 600, hp: 1e9, max: 1e9, speed: 120, kind: 0, tier: 0, carry: 0, leave: false, path: [{ x: 900, y: 300 }], slow: 1, face: 1 });
+  step(w, DT);
+  assert(w.mice[0].leave, 'an empty plate sends heading mice home at once');
+  w.plate = SLICES;
+  step(w, DT);
+  assert(!w.mice[0].leave, 'slices back on the plate send them to the plate again');
+}
+
+// 쫓던 조각이 깜빡이다 접시로 돌아가면, 집으로 가던 생쥐도 다시 접시로 간다
+{
+  const w = createWorld();
+  w.waveCd = 1e9;
+  w.plate = 0;
+  w.lost = SLICES - 1;
+  w.drops.push({ x: 300, y: 900, t: 7.99, n: 1 });
+  w.mice.push({ id: 10, x: 600, y: 300, hp: 1e9, max: 1e9, speed: 60, kind: 0, tier: 0, carry: 0, leave: true, path: [], slow: 1, face: 1 });
+  step(w, DT);
+  assert(w.plate === 1 && !w.drops.length, 'the slice went back to the plate');
+  const d0 = Math.hypot(CHEESE_X - w.mice[0].x, CHEESE_Y - w.mice[0].y);
+  for (let i = 0; i < 1 / DT; i++) {
+    step(w, DT);
+  }
+  assert(!w.mice[0].leave && Math.hypot(CHEESE_X - w.mice[0].x, CHEESE_Y - w.mice[0].y) < d0, 'the chaser turns to the plate again');
+}
+
 // 한 번에 훔쳐 가는 양: 생쥐 1, 행동대장쥐 2, 대장쥐 3. 남은 게 적으면 있는 만큼만
 for (const kind of [0, 1, 2] as const) {
   const w = createWorld();
@@ -153,13 +292,15 @@ for (const kind of [0, 1, 2] as const) {
   assert(w.mice[0].carry === want && conserved(w), `kind ${kind} carries ${want}`);
 }
 
-// 등급: 1~5라운드는 흰색만, 6라운드부터 주황이 섞이기 시작해 10라운드엔 모두 주황, 21라운드 넘으면 검정
+// 등급: 1~10라운드는 흰색만, 11라운드부터 주황이 섞여 20라운드엔 모두 주황, 검정은 41라운드부터 섞여 마지막 라운드엔 전부
 {
   const tiers = (wave: number) => [...Array(10).keys()].map((i) => tierFor(wave, i + 1));
-  assert(tiers(5).every((t) => t === 0), 'rounds 1-5 are white only');
-  assert(tiers(6).includes(1) && tiers(6).includes(0), 'round 6 mixes orange in');
-  assert(tiers(10).every((t) => t === 1), 'round 10 is all orange');
-  assert(tiers(30).every((t) => t === 4), 'late rounds are black');
+  assert(tiers(10).every((t) => t === 0), 'rounds 1-10 are white only');
+  assert(tiers(11).includes(1) && tiers(11).includes(0), 'round 11 mixes orange in');
+  assert(tiers(20).every((t) => t === 1), 'round 20 is all orange');
+  assert(tiers(40).every((t) => t === 3), 'no black before round 41');
+  assert(tiers(41).includes(4), 'black mixes in from round 41');
+  assert(tiers(FINAL_ROUND).every((t) => t === 4), 'the final round is all black');
 }
 
 // 자동 플레이: 돈이 생기면 고양이를 놓고 키운다. 같은 시드면 같은 결과, 치즈 개수는 늘 보존

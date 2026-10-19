@@ -4,7 +4,7 @@ export const ROWS = 12;
 export const CELL = 100;
 export const SLICES = 8;
 // 이 라운드까지 버티면 클리어
-export const FINAL_ROUND = 100;
+export const FINAL_ROUND = 50;
 // 쥐구멍은 위쪽 벽, 치즈는 오른쪽 아래 2×2 칸. 쥐는 고양이를 뛰어넘어 곧장 다녀서, 고양이로 길을 막을 수 없다
 export const HOLE = 1;
 export const CHEESE = [9 + 9 * COLS, 10 + 9 * COLS, 9 + 10 * COLS, 10 + 10 * COLS];
@@ -44,26 +44,44 @@ export const canDmgBoost = (cat: Cat) => {
 export const dmgBoostPrice = (cat: Cat) => {
   return 100 + 60 * cat.dmgBoost;
 };
-// 단계마다 공격 간격 12% 단축, 공격력 1.2배, 졸린냥은 범위 0.25칸 증가
-export const statsOf = (cat: Cat): CatSpec => {
+// 단계마다 공격 간격 12% 단축, 공격력 1.2배, 졸린냥은 범위 0.25칸 증가.
+// aura는 붙어 있는 챔피언 뚱냥 수: 하나마다 공격 속도 강화 1번, 공격력 강화 0.5번을 받은 것처럼 세진다(강화 상한과 따로)
+export const statsOf = (cat: Cat, aura = 0): CatSpec => {
   const s = CATS[cat.kind];
-  return s.slow ? { ...s, range: s.range + 0.25 * cat.boost } : { ...s, cd: s.cd * Math.pow(0.88, cat.boost), dmg: s.dmg * Math.pow(1.2, cat.dmgBoost) };
+  const spd = cat.boost + aura;
+  return s.slow ? { ...s, range: s.range + 0.25 * spd } : { ...s, cd: s.cd * Math.pow(0.88, spd), dmg: s.dmg * Math.pow(1.2, cat.dmgBoost + 0.5 * aura) };
 };
 export type MouseKind = 0 | 1 | 2; // 생쥐, 행동대장쥐(빠름), 대장쥐(보스)
 // 한 번에 훔쳐 가는 치즈 조각 수
 export const CARRY: Record<MouseKind, number> = { 0: 1, 1: 2, 2: 3 };
-// 등급(테두리 색): 0 흰색, 1 주황, 2 빨강, 3 보라, 4 회흑(GREY 90). 5라운드마다 한 등급씩 새로 나오고,
-// 그 5라운드 동안 새 등급의 비율이 1/5씩 늘어난다
-export const TIER_ROUNDS = 5;
-const TIER_HP = [1, 1.8, 3.2, 5.5, 9];
+// 등급(테두리 색): 0 흰색, 1 주황, 2 빨강, 3 보라, 4 회흑(GREY 90). 10라운드마다 한 등급씩 새로 나오고,
+// 그 10라운드 동안 새 등급의 비율이 1/10씩 늘어난다. 최종형 회흑은 41라운드부터 섞여 50라운드에 전부가 된다
+export const TIER_ROUNDS = 10;
+const TIER_HP = [1, 1.5, 2.2, 3, 4];
 const TIER_SPEED = [1, 1.06, 1.12, 1.18, 1.25];
 const TIER_GOLD = [1, 1.5, 2, 3, 4];
-// 생쥐 체력은 라운드마다 1.15배, 모두 검정이 된 25라운드 뒤로는 1.0625배씩 오른다.
-// 잘 짠 전략으로도 100라운드는 겨우 넘길 만큼(강한 자동 플레이 69판 중 14% 클리어)
-const LATE_FROM = 25;
-const hpScale = (wave: number) => {
-  return Math.pow(1.15, Math.min(wave, LATE_FROM) - 1) * Math.pow(1.0625, Math.max(0, wave - LATE_FROM));
+// 최종형 회흑 생쥐는 졸음을 버틴다: 받는 슬로우가 생쥐 15%, 행동대장쥐 25%, 대장쥐 40%만큼 약해진다
+export const SLOW_RESIST: Record<MouseKind, number> = { 0: 0.15, 1: 0.25, 2: 0.4 };
+export const slowFor = (m: Mouse, slow: number) => {
+  return m.tier === 4 ? slow * (1 - SLOW_RESIST[m.kind]) : slow;
 };
+// 생쥐 체력은 30라운드까지 라운드마다 1.18배, 그 뒤로 1.075배. 등급 배율도 완만하게 두어 30라운드 뒤로는 10라운드마다 약 3배씩만 오른다.
+// 최후의 대장쥐까지 넣어 잘 짠 전략으로도 겨우 클리어할 만큼(강한 자동 플레이 100판 중 절반이 50라운드에 닿고, 그중 1/3만 대장쥐를 잡아 19% 클리어)
+const HP_BEND = 30;
+const hpScale = (wave: number) => {
+  return Math.pow(1.18, Math.min(wave, HP_BEND) - 1) * Math.pow(1.075, Math.max(0, wave - HP_BEND));
+};
+// 라운드별 보통 걸리는 시간(초, 게임 시간). 강한 자동 플레이 100판의 라운드별 중앙값이다(떨어진 조각 노리기까지 넣은 규칙 기준)
+export const ROUND_TIME = [38, 34, 34, 37, 39, 36, 39, 40, 42, 62, 46, 50, 55, 54, 56, 62, 63, 65, 67, 71, 65, 68, 71, 70, 67, 69, 68, 64, 62, 77, 67, 66, 62, 63, 63, 64, 64, 67, 65, 89, 70, 73, 76, 80, 77, 82, 85, 88, 89, 127];
+// 라운드를 보통보다 빨리 끝내면 등급 시계가 1라운드보다 더 가고, 느리면 덜 간다.
+// 보통보다 10% 빠르면 1.2라운드, 10% 느리면 0.8라운드쯤. 한 라운드에 0.6~1.4라운드 사이로만 움직인다
+const TIER_GAIN = 2;
+export const tierStep = (wave: number, seconds: number) => {
+  const usual = ROUND_TIME[Math.min(wave, ROUND_TIME.length) - 1];
+  // 로그 비율이라 빠른 쪽과 느린 쪽이 같은 폭으로 움직인다
+  return Math.min(1.4, Math.max(0.6, 1 + TIER_GAIN * Math.log(usual / seconds)));
+};
+// wave 자리에는 등급 시계(소수)가 들어온다
 export const tierFor = (wave: number, i: number) => {
   const top = Math.min(4, Math.floor((wave - 1) / TIER_ROUNDS));
   if (!top) {
@@ -92,7 +110,12 @@ export type World = {
   kills: number;
   time: number;
   status: 'playing' | 'over' | 'clear';
+  // 마지막 라운드의 대장쥐(최후의 대장쥐)가 쥐구멍으로 돌아가면 치즈와 상관없이 진다
+  bossEscaped: boolean;
   nextId: number;
+  // 등급 시계(라운드 단위, 빨리 끝낼수록 빨리 간다)와 이번 라운드 시작 시각
+  tierClock: number;
+  roundStart: number;
 };
 
 const SHOT_SPEED = 700;
@@ -124,6 +147,13 @@ const catAt = (w: World, cell: number) => {
   return w.cats.find((c) => c.cell === cell);
 };
 
+// 상하좌우로 붙어 있는 챔피언 뚱냥 수(최대 4). 줄 끝과 다음 줄 첫 칸은 붙은 칸이 아니다
+export const auraOf = (w: World, cat: Cat) => {
+  const c = cat.cell % COLS;
+  const near = [cat.cell - COLS, cat.cell + COLS, c > 0 ? cat.cell - 1 : -1, c < COLS - 1 ? cat.cell + 1 : -1];
+  return near.filter((n) => n >= 0 && catAt(w, n)?.kind === 'b3').length;
+};
+
 export const createWorld = (): World => {
   const w: World = {
     cats: [],
@@ -142,6 +172,9 @@ export const createWorld = (): World => {
     time: 0,
     status: 'playing',
     nextId: 1,
+    tierClock: 1,
+    bossEscaped: false,
+    roundStart: -1,
   };
   return w;
 };
@@ -212,7 +245,7 @@ const spawn = (w: World) => {
   const i = w.toSpawn;
   const boss = w.wave % 10 === 0 && i === 1;
   const fast = !boss && w.wave >= 3 && i % 3 === 0;
-  const tier = tierFor(w.wave, i);
+  const tier = tierFor(w.tierClock, i);
   const hp = 6 * hpScale(w.wave) * (boss ? 10 : fast ? 0.6 : 1) * TIER_HP[tier];
   const kind: MouseKind = boss ? 2 : fast ? 1 : 0;
   w.mice.push({
@@ -284,10 +317,39 @@ const hurt = (w: World, m: Mouse, dmg: number) => {
   }
 };
 
+// 빈손 생쥐가 노리는 떨어진 조각: 가장 가까운 것. 접시보다 가깝거나, 접시가 비었거나, 돌아가던 중이면 그리로 간다
+const dropTarget = (w: World, m: Mouse) => {
+  let best: Drop | undefined;
+  let bestD = Infinity;
+  for (const drop of w.drops) {
+    const d = Math.hypot(drop.x - m.x, drop.y - m.y);
+    if (drop.t >= 0 && drop.n > 0 && d < bestD) {
+      bestD = d;
+      best = drop;
+    }
+  }
+  return best && (!w.plate || m.leave || bestD < Math.hypot(CHEESE_X - m.x, CHEESE_Y - m.y)) ? best : undefined;
+};
+
 const moveMouse = (w: World, m: Mouse, dt: number) => {
-  const home = m.carry > 0 || m.leave;
-  const gx = home ? HOLE_X : CHEESE_X;
-  const gy = home ? HOLE_Y : CHEESE_Y;
+  const drop = m.carry ? undefined : dropTarget(w, m);
+  if (drop) {
+    // 떨어진 조각으로 곧장 달려간다. 줍는 건 아래 떨어진 조각 처리에서 한다
+    m.path = [];
+  }
+  // 빈손인데 접시가 비었고 주울 조각도 없으면 그 자리에서 곧장 집으로 돌아선다. 접시에 조각이 돌아오면 다시 접시로 간다
+  const leave = !m.carry && !drop && !w.plate;
+  if (leave !== m.leave) {
+    m.leave = leave;
+    if (leave) {
+      plan(m, HOLE_X, HOLE_Y, 2, 0, 1);
+    } else if (!drop) {
+      m.path = [];
+    }
+  }
+  const home = !drop && (m.carry > 0 || m.leave);
+  const gx = drop ? drop.x : home ? HOLE_X : CHEESE_X;
+  const gy = drop ? drop.y : home ? HOLE_Y : CHEESE_Y;
   const dx = gx - m.x;
   const dy = gy - m.y;
   const d = Math.hypot(dx, dy);
@@ -297,10 +359,13 @@ const moveMouse = (w: World, m: Mouse, dt: number) => {
       w.lost += m.carry;
       w.fx.push({ kind: 'escape', x: m.x, y: m.y, t: 0 });
     }
+    if (m.kind === 2 && w.wave >= FINAL_ROUND) {
+      w.bossEscaped = true;
+    }
     m.hp = 0;
     return;
   }
-  if (!home && d <= CHEESE_REACH) {
+  if (!drop && !home && d <= CHEESE_REACH) {
     // 접시가 비었으면 빈손으로 돌아간다
     const take = Math.min(CARRY[m.kind], w.plate);
     if (take) {
@@ -381,6 +446,7 @@ export const step = (w: World, dt: number) => {
       w.toSpawn = Math.min(40, 4 + w.wave * 2);
       w.spawnCd = 0;
       w.waveCd = 2.5;
+      w.roundStart = w.time;
     }
   }
 
@@ -388,12 +454,12 @@ export const step = (w: World, dt: number) => {
     m.slow = 1;
   }
   for (const cat of w.cats) {
-    const s = statsOf(cat);
+    const s = statsOf(cat, auraOf(w, cat));
     const range = s.range * CELL;
     if (s.slow) {
       for (const m of w.mice) {
         if (m.hp > 0 && Math.hypot(m.x - cx(cat.cell), m.y - cy(cat.cell)) <= range) {
-          m.slow = Math.min(m.slow, 1 - s.slow);
+          m.slow = Math.min(m.slow, 1 - slowFor(m, s.slow));
           hurt(w, m, s.dmg * dt);
         }
       }
@@ -446,7 +512,7 @@ export const step = (w: World, dt: number) => {
     }
   }
 
-  // 떨어진 조각: 빈손 쥐가 지나가면 주워 가고, 한동안 아무도 안 주우면 접시로 돌아온다
+  // 떨어진 조각: 빈손 쥐가 달려와 주워 가고, 한동안 아무도 안 주우면 접시로 돌아온다
   for (const drop of w.drops) {
     drop.t += dt;
     const m = w.mice.find((t) => t.hp > 0 && !t.carry && Math.hypot(t.x - drop.x, t.y - drop.y) <= PICK_RADIUS);
@@ -475,7 +541,12 @@ export const step = (w: World, dt: number) => {
     f.t += dt;
   }
   w.fx = w.fx.filter((f) => f.t < 0.6);
-  if (w.lost >= SLICES) {
+  // 이번 라운드 마지막 생쥐가 사라지면 걸린 시간만큼 등급 시계를 돌린다
+  if (w.roundStart >= 0 && !w.toSpawn && !w.mice.length) {
+    w.tierClock += tierStep(w.wave, w.time - w.roundStart);
+    w.roundStart = -1;
+  }
+  if (w.lost >= SLICES || w.bossEscaped) {
     w.status = 'over';
   } else if (w.wave >= FINAL_ROUND && !w.toSpawn && !w.mice.length) {
     w.status = 'clear';
