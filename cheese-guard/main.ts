@@ -1,4 +1,4 @@
-import { boost, boostPrice, canBoost, canPlace, CATS, CELL, cellAt, CHEESE, COLS, createWorld, cx, cy, CHEESE_X, CHEESE_Y, HOLE, place, placePrice, refund, sell, SLICES, statsOf, step, upgrade } from './sim.ts';
+import { boost, boostPrice, canBoost, canDmgBoost, canPlace, CATS, CELL, cellAt, CHEESE, COLS, createWorld, cx, cy, CHEESE_X, CHEESE_Y, dmgBoost, dmgBoostPrice, FINAL_ROUND, HOLE, place, placePrice, refund, sell, SLICES, statsOf, step, upgrade } from './sim.ts';
 
 import type { Cat, CatKind, Mouse, World } from './sim.ts';
 
@@ -226,7 +226,7 @@ const whyNot = (cell: number) => {
 };
 
 const hud = () => {
-  $('wave').textContent = `라운드 ${Math.max(1, world.wave)}`;
+  $('wave').textContent = `라운드 ${Math.max(1, world.wave)}/${FINAL_ROUND}`;
   $('gold').textContent = String(world.gold);
   $('slices').textContent = `${world.plate + world.drops.reduce((n, d) => n + d.n, 0) + world.mice.reduce((n, m) => n + m.carry, 0)}/${SLICES}`;
 };
@@ -243,7 +243,7 @@ const stats = (cat: Cat) => {
   if (s.slow) {
     return `느리게 ${Math.round(s.slow * 100)}% · 초당 ${s.dmg} · 사거리 ${s.range.toFixed(2).replace(/\.?0+$/, '')}`;
   }
-  return `공격 ${s.dmg} · ${(1 / s.cd).toFixed(1)}회/초 · 사거리 ${s.range}${s.splash ? ' · 주변 함께' : ''}`;
+  return `공격 ${Math.round(s.dmg)} · ${(1 / s.cd).toFixed(1)}회/초 · 사거리 ${s.range}${s.splash ? ' · 주변 함께' : ''}`;
 };
 
 // 아래 패널: 고른 고양이가 있으면 업그레이드·판매, 없으면 놓는 법과 다음 고양이 값
@@ -272,7 +272,7 @@ const renderPanel = () => {
   icon.src = CAT_IMG[cat.kind].src;
   icon.alt = '';
   const info = make('div', '');
-  info.append(make('b', '', cat.boost ? `${CATS[cat.kind].name} +${cat.boost}` : CATS[cat.kind].name), make('small', '', stats(cat)));
+  info.append(make('b', '', cat.boost + cat.dmgBoost ? `${CATS[cat.kind].name} +${cat.boost + cat.dmgBoost}` : CATS[cat.kind].name), make('small', '', stats(cat)));
   head.append(icon, info);
   const actions = make('div', 'ups');
   for (const next of CATS[cat.kind].next) {
@@ -290,23 +290,30 @@ const renderPanel = () => {
     });
     actions.append(b);
   }
-  if (canBoost(cat)) {
-    // 최종 단계: 공격하는 냥은 공격 속도, 졸린냥은 범위를 계속 올린다
-    const price = boostPrice(cat);
+  // 최종 단계: 공격하는 냥은 공격 속도와 공격력, 졸린냥은 범위를 계속 올린다
+  const boosts: [boolean, string, number, number, () => void][] = [
+    [canBoost(cat), CATS[cat.kind].slow ? '범위' : '공격 속도', cat.boost, boostPrice(cat), () => boost(world, cat.cell)],
+    [canDmgBoost(cat), '공격력', cat.dmgBoost, dmgBoostPrice(cat), () => dmgBoost(world, cat.cell)],
+  ];
+  for (const [ok, name, level, price, run] of boosts) {
+    if (!ok) {
+      continue;
+    }
     const b = make('button', 'up') as HTMLButtonElement;
     const im = make('img', '') as HTMLImageElement;
     im.src = CAT_IMG[cat.kind].src;
     im.alt = '';
     const label = make('span', '');
-    label.append(make('b', '', `${CATS[cat.kind].slow ? '범위' : '공격 속도'} 강화 +${cat.boost + 1}`), make('small', '', `🪙 ${price}`));
+    label.append(make('b', '', `${name} 강화 +${level + 1}`), make('small', '', `🪙 ${price}`));
     b.append(im, label);
     priced.push({ el: b, price });
     b.addEventListener('click', () => {
-      boost(world, cat.cell);
+      run();
       renderPanel();
     });
     actions.append(b);
-  } else if (cat.kind.endsWith('3')) {
+  }
+  if (cat.kind.endsWith('3') && !canBoost(cat) && !canDmgBoost(cat)) {
     actions.append(make('span', 'maxed', '최대로 강해졌어요'));
   }
   const sellBtn = make('button', 'sell', `팔기 +${refund(cat)}`) as HTMLButtonElement;
@@ -341,8 +348,21 @@ const end = () => {
     save(BEST_KEY, String(world.wave));
   }
   const hero = make('img', 'hero') as HTMLImageElement;
-  hero.src = MOUSE_IMG[2][0].src;
   hero.alt = '';
+  if (world.status === 'clear') {
+    hero.src = CAT_IMG.a3.src;
+    showCard(
+      hero,
+      make('h2', 'title', `${FINAL_ROUND}라운드 클리어!`),
+      make('p', 'sub', `치즈 ${world.plate + world.drops.reduce((n, d) => n + d.n, 0)}조각을 끝까지 지켰어요`),
+      make('p', 'sub small', `잡은 생쥐 ${world.kills}마리`),
+      button('다시 하기', () => {
+        start();
+      }),
+    );
+    return;
+  }
+  hero.src = MOUSE_IMG[2][0].src;
   showCard(
     hero,
     make('h2', 'title', '치즈를 모두 빼앗겼어요'),
@@ -364,6 +384,7 @@ const showReady = () => {
     ['고양이', '치즈냥·뚱냥·졸린냥으로 키우기, 팔기'],
     ['생쥐', '고양이를 뛰어넘어 와서 치즈를 들고 도망쳐요. 행동대장쥐는 2조각, 대장쥐는 3조각'],
     ['떨어진 치즈', '도망치던 생쥐를 잡으면 떨어져요. 8초 뒤 접시로 돌아가요'],
+    ['목표', `${FINAL_ROUND}라운드까지 버티면 클리어`],
   ]) {
     const li = make('li', '');
     li.append(make('b', '', k), v);
@@ -408,7 +429,7 @@ const loop = (ts: number) => {
   if (gold !== world.gold) {
     refreshPanel();
   }
-  if (world.status === 'over' && !ended) {
+  if (world.status !== 'playing' && !ended) {
     end();
   }
   requestAnimationFrame(loop);
