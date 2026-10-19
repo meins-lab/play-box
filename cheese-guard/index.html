@@ -30,6 +30,7 @@
       .hud { display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 16px; background: var(--panel); box-shadow: var(--shadow); }
       .hud .stat { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 10px; border-radius: 10px; background: var(--soft); font-weight: 800; white-space: nowrap; }
       .hud .stat.round { flex: 1; justify-content: center; }
+      @media (max-width: 440px) { .hud { gap: 4px; } .hud .stat { padding: 0 7px; } .hud .stat.round .label { display: none; } .hud button { width: 32px; } }
       .hud button { flex: none; width: 40px; height: 32px; border: 0; border-radius: 10px; background: var(--soft); font-weight: 900; }
       .hud button:hover { background: var(--line); }
       .stage { position: relative; }
@@ -65,6 +66,8 @@
       .card .primary { width: 100%; padding: 14px 0; border: 0; border-radius: 14px; background: var(--mint); color: #fff; font-size: 17px; font-weight: 800; transition: background 0.15s, transform 0.1s; }
       .card .primary:hover { background: var(--mint-hover); }
       .card .primary:active { transform: scale(0.98); }
+      .card .ghost { width: 100%; margin-bottom: 8px; padding: 12px 0; border: 0; border-radius: 14px; background: var(--soft); color: var(--ink); font-size: 16px; font-weight: 800; }
+      .card .ghost:hover { background: var(--line); }
       .home { position: fixed; top: 10px; left: 12px; z-index: 1; padding: 8px 14px; border-radius: 999px; background: var(--panel); color: var(--ink); font-size: 14px; font-weight: 800; text-decoration: none; box-shadow: var(--shadow); -webkit-tap-highlight-color: transparent; }
       .home:active { transform: scale(0.97); }
       .links { position: fixed; top: 6px; right: 10px; font: 11px/1.4 -apple-system, sans-serif; }
@@ -80,9 +83,10 @@
     <main>
       <h1><img src="/cheese-guard/cheese.png" alt="" /> Cheese Guard</h1>
       <div class="hud" id="hud">
-        <span class="stat round" id="wave">라운드 1</span>
+        <span class="stat round"><span class="label">라운드</span> <span id="wave">1</span></span>
         <span class="stat" title="돈">🪙 <span id="gold">0</span></span>
         <span class="stat" title="남은 치즈">🧀 <span id="slices">8/8</span></span>
+        <button id="pause" aria-label="일시정지">⏸</button>
         <button id="speed" aria-label="속도">2×</button>
         <button id="restart" aria-label="다시 하기">↻</button>
       </div>
