@@ -280,6 +280,28 @@ for (const wave of [FINAL_ROUND - 10, FINAL_ROUND]) {
   assert(!w.mice[0].leave && Math.hypot(CHEESE_X - w.mice[0].x, CHEESE_Y - w.mice[0].y) < d0, 'the chaser turns to the plate again');
 }
 
+// 라운드가 끝나면 바닥에 남은 조각은 기다리지 않고 바로 접시로 돌아간다
+{
+  const w = createWorld();
+  w.wave = 3;
+  w.roundStart = 0;
+  w.plate = SLICES - 3;
+  w.drops.push({ x: 300, y: 900, t: 0, n: 2 }, { x: 500, y: 500, t: 0, n: 1 });
+  step(w, DT);
+  assert(w.plate === SLICES && !w.drops.length && conserved(w), 'leftover slices return when the round ends');
+}
+
+// 마지막 라운드에는 최후의 대장쥐 한 마리만 나온다
+{
+  const w = createWorld();
+  w.wave = FINAL_ROUND - 1;
+  w.waveCd = 0;
+  for (let i = 0; i < 10 / DT; i++) {
+    step(w, DT);
+  }
+  assert(w.wave === FINAL_ROUND && w.mice.length === 1 && w.mice[0].kind === 2 && !w.toSpawn, 'only the final boss comes in the last round');
+}
+
 // 한 번에 훔쳐 가는 양: 생쥐 1, 행동대장쥐 2, 대장쥐 3. 남은 게 적으면 있는 만큼만
 for (const kind of [0, 1, 2] as const) {
   const w = createWorld();
