@@ -66,7 +66,7 @@ export const slowFor = (m: Mouse, slow: number) => {
   return m.tier === 4 ? slow * (1 - SLOW_RESIST[m.kind]) : slow;
 };
 // 생쥐 체력은 30라운드까지 라운드마다 1.18배, 그 뒤로 1.075배. 등급 배율도 완만하게 두어 30라운드 뒤로는 10라운드마다 약 3배씩만 오른다.
-// 최후의 대장쥐까지 넣어 잘 짠 전략으로도 겨우 클리어할 만큼(강한 자동 플레이 100판 중 절반이 50라운드에 닿고, 그중 1/3만 대장쥐를 잡아 19% 클리어)
+// 최후의 대장쥐까지 넣어 잘 짠 전략으로도 겨우 클리어할 만큼(강한 자동 플레이 100판 중 61판이 50라운드에 닿고, 그중 1/3만 대장쥐를 잡아 19% 클리어)
 const HP_BEND = 30;
 const hpScale = (wave: number) => {
   return Math.pow(1.18, Math.min(wave, HP_BEND) - 1) * Math.pow(1.075, Math.max(0, wave - HP_BEND));
@@ -246,7 +246,8 @@ const spawn = (w: World) => {
   const boss = w.wave % 10 === 0 && i === 1;
   const fast = !boss && w.wave >= 3 && i % 3 === 0;
   const tier = tierFor(w.tierClock, i);
-  const hp = 6 * hpScale(w.wave) * (boss ? 10 : fast ? 0.6 : 1) * TIER_HP[tier];
+  // 최후의 대장쥐는 혼자 나오는 대신 보통 대장쥐 체력의 1.6배
+  const hp = 6 * hpScale(w.wave) * (boss ? (w.wave >= FINAL_ROUND ? 16 : 10) : fast ? 0.6 : 1) * TIER_HP[tier];
   const kind: MouseKind = boss ? 2 : fast ? 1 : 0;
   w.mice.push({
     id: w.nextId++,
@@ -443,7 +444,8 @@ export const step = (w: World, dt: number) => {
         w.gold += 5 + w.wave;
       }
       w.wave++;
-      w.toSpawn = Math.min(40, 4 + w.wave * 2);
+      // 마지막 라운드에는 최후의 대장쥐 한 마리만 나온다
+      w.toSpawn = w.wave >= FINAL_ROUND ? 1 : Math.min(40, 4 + w.wave * 2);
       w.spawnCd = 0;
       w.waveCd = 2.5;
       w.roundStart = w.time;
@@ -545,6 +547,12 @@ export const step = (w: World, dt: number) => {
   if (w.roundStart >= 0 && !w.toSpawn && !w.mice.length) {
     w.tierClock += tierStep(w.wave, w.time - w.roundStart);
     w.roundStart = -1;
+    // 라운드가 끝나면 바닥에 남은 조각은 다음 라운드 전에 곧바로 접시로 돌아간다
+    for (const drop of w.drops) {
+      w.plate += drop.n;
+      w.fx.push({ kind: 'back', x: drop.x, y: drop.y, t: 0 });
+    }
+    w.drops = [];
   }
   if (w.lost >= SLICES || w.bossEscaped) {
     w.status = 'over';
