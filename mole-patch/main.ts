@@ -1,4 +1,5 @@
 import { chord, createBoard, LEVELS, reveal, toggleFlag } from './board.ts';
+import { gameEnd, gameStart } from '../shared/analytics.ts';
 
 import type { Board, LevelId } from './board.ts';
 
@@ -92,6 +93,7 @@ const bestKey = () => {
 
 const end = () => {
   clearInterval(timer);
+  gameEnd(board.status === 'won' ? 'clear' : 'over');
   if (board.status === 'won') {
     const t = elapsed();
     const best = Number(read(bestKey())) || 0;
@@ -116,6 +118,7 @@ const act = (i: number, flag: boolean) => {
   if (before === 'ready' && board.status !== 'ready') {
     startedAt = Date.now();
     timer = window.setInterval(render, 1000);
+    gameStart('mole-patch', () => ({ level }));
   }
   if (board.status === 'won' || board.status === 'lost') {
     end();

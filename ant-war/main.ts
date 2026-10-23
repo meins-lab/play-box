@@ -1,5 +1,6 @@
 import { LEVELS } from './levels.ts';
 import { createWorld, cut, grade, link, MARCH, NEUTRAL, outgoing, PLAYER, SLOTS, SPACING, step, think } from './sim.ts';
+import { gameEnd, gameStart } from '../shared/analytics.ts';
 
 import type { Owner, Trail, World } from './sim.ts';
 
@@ -330,6 +331,7 @@ const showCard = (...parts: HTMLElement[]) => {
 const end = () => {
   ended = true;
   const won = world.status === 'won';
+  gameEnd(won ? 'clear' : 'over');
   const isLast = level === LEVELS.length - 1;
   const actions = make('div', 'actions');
   const retry = button('다시 하기', !won, () => {
@@ -412,6 +414,7 @@ const showReady = () => {
   actions.append(
     button('시작하기', true, () => {
       paused = false;
+      gameStart('ant-war', () => ({ level: level + 1 }));
       overlayEl.hidden = true;
       overlayEl.replaceChildren();
     }),

@@ -3,3 +3,6 @@ dist
 .yarn/*
 !.yarn/releases
 .idea
+
+.claude/
+.taste-skill/
