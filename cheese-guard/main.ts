@@ -1,6 +1,8 @@
-import { auraOf, boost, boostPrice, canBoost, canDmgBoost, canPlace, CATS, CELL, cellAt, CHEESE, COLS, createWorld, cx, cy, CHEESE_X, CHEESE_Y, dmgBoost, dmgBoostPrice, FINAL_ROUND, HOLE, MAX_BOOST, place, placePrice, refund, sell, SLICES, statsOf, step, upgrade } from './sim.ts';
+import { auraOf, boost, boostPrice, canBoost, canDmgBoost, canPlace, CATS, CELL, cellAt, CHEESE, COLS, createWorld, cx, cy, CHEESE_X, CHEESE_Y, dmgBoost, dmgBoostPrice, FINAL_ROUND, finalWarning, goldText, HOLE, MAX_BOOST, place, placePrice, refund, sell, SLICES, statsOf, step, upgrade } from './sim.ts';
+import { gameEnd, gameStart } from '../shared/analytics.ts';
 
 import type { Cat, CatKind, Mouse, World } from './sim.ts';
+import type { AnimationConfigWithData, AnimationItem } from 'lottie-web';
 
 const DT = 1 / 30;
 const SIZE = COLS * CELL;
@@ -35,6 +37,18 @@ const catImg = (cat: Cat) => {
 const MOUSE_IMG = ['mouse', 'mouse-fast', 'mouse-boss'].map((n) => [0, 1, 2, 3, 4].map((t) => img(t ? `${n}-t${t}` : n)));
 const FX_IMG = { cheese: img('cheese'), hole: img('hole'), yarn: img('yarn'), paw: img('paw'), sleepy: img('sleepy'), crumbs: img('crumbs') };
 const FLOOR = img('floor', 'jpg');
+// 사이렌 로티는 마지막 라운드 경고 때만 쓰므로 처음 필요할 때 불러와 512px 캔버스에 그려 둔다
+const SIREN = document.createElement('canvas');
+SIREN.width = SIREN.height = 512;
+let sirenAnim: AnimationItem | null = null;
+let sirenAsked = false;
+const loadSiren = async () => {
+  sirenAsked = true;
+  const [{ default: lottie }, data] = await Promise.all([import('lottie-web/build/player/lottie_light_canvas'), fetch('/cheese-guard/siren.json').then((r) => r.json())]);
+  // container를 주면 화면에 없는 캔버스의 크기(0)를 재서 아무것도 안 그린다. 그려 넣을 context만 준다
+  const config = { renderer: 'canvas', loop: true, autoplay: false, animationData: data, rendererSettings: { context: SIREN.getContext('2d')!, clearCanvas: true } } as AnimationConfigWithData<'canvas'>;
+  sirenAnim = lottie.loadAnimation(config);
+};
 const PLATE_IMG = Array.from({ length: SLICES + 1 }, (_, n) => img(`plate-${n}`));
 
 const read = (key: string) => {
@@ -223,6 +237,11 @@ const draw = () => {
     }
     ctx.globalAlpha = 1;
   }
+  if (devPrep()) {
+    drawFinalWarning(false);
+  } else if (finalWarning(world)) {
+    drawFinalWarning(true);
+  }
   // 못 놓은 이유를 칸 위에 잠깐 띄운다
   if (held) {
     ctx.fillStyle = 'rgba(90, 58, 34, 0.35)';
@@ -249,6 +268,71 @@ const draw = () => {
   }
 };
 
+// 마지막 라운드 직전 경고. 대비하는 동안 판이 보여야 하므로 위쪽 띠와 붉게 깜박이는 테두리만 그린다.
+// final이 아니면 개발자 점프의 준비 시간: 사이렌 없이 같은 띠에 「준비 완료」 버튼
+const BANNER = 150;
+const READY_BTN = [SIZE - 300, 30, 250, 90];
+const drawFinalWarning = (final: boolean) => {
+  const t = performance.now() / 1000;
+  const blink = Math.sin(t * Math.PI * 4) > 0;
+  ctx.fillStyle = 'rgba(60, 20, 10, 0.72)';
+  ctx.fillRect(0, 0, SIZE, BANNER);
+  let x = 50;
+  if (final) {
+    if (!sirenAsked) {
+      void loadSiren();
+    }
+    sirenAnim?.goToAndStop((t * 60) % 30, true);
+    ctx.strokeStyle = `rgba(255, 50, 40, ${blink ? 0.85 : 0.35})`;
+    ctx.lineWidth = 16;
+    // CSS가 캔버스 모서리를 18px 둥글게 자르므로 같은 곡률로 그려야 모서리에서 끊기지 않는다
+    const r = (18 * SIZE) / (canvas.clientWidth || SIZE);
+    ctx.beginPath();
+    ctx.roundRect(8, 8, SIZE - 16, SIZE - 16, Math.max(0, r - 8));
+    ctx.stroke();
+    for (const sx of [80, SIZE - 80]) {
+      if (sirenAnim) {
+        // 로티가 깜박임·흔들림·빛 번짐을 그린다. 15프레임(0.5초)마다 한 번 깜박여 테두리와 박자가 맞는다
+        ctx.drawImage(SIREN, sx - 75, BANNER / 2 - 80, 150, 150);
+      } else {
+        // 로티를 불러오는 동안 잠깐 쓰는 대체 그림
+        ctx.fillStyle = blink ? '#ff3b30' : '#b3201a';
+        ctx.beginPath();
+        ctx.arc(sx, BANNER / 2 + 10, 45, Math.PI, 0);
+        ctx.fill();
+      }
+    }
+    x = 170;
+  }
+  const [title, line] = final ? ['⚠ 최종 라운드 경고', '최후의 대장쥐 출현! 대비하세요'] : ['개발자 모드', `${world.wave + 1}라운드 준비 · 🪙 무한`];
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = final && blink ? '#ff5a4a' : '#ffd84a';
+  ctx.font = '900 46px -apple-system, "Apple SD Gothic Neo", sans-serif';
+  ctx.fillText(title, x, 50);
+  ctx.fillStyle = '#fff';
+  ctx.font = '800 30px -apple-system, "Apple SD Gothic Neo", sans-serif';
+  ctx.fillText(line, x, 104);
+  if (!final) {
+    const [bx, by, bw, bh] = READY_BTN;
+    ctx.fillStyle = '#4fbf96';
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 24);
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.font = '900 40px -apple-system, "Apple SD Gothic Neo", sans-serif';
+    ctx.fillText('준비 완료', bx + bw / 2, by + bh / 2 + 2);
+    return;
+  }
+  // 남은 시간은 0.01초까지, 3초 아래로는 빨갛게 깜박인다
+  const left = Math.max(0, world.waveCd - acc);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = left < 3 && blink ? '#ff5a4a' : '#fff';
+  ctx.font = '900 76px -apple-system, "Apple SD Gothic Neo", sans-serif';
+  ctx.fillText(`${left.toFixed(2)}초`, SIZE - 170, BANNER / 2 + 4);
+};
+
 // 빈칸에 못 놓은 이유: 쥐구멍·치즈 자리, 아니면 돈
 const whyNot = (cell: number) => {
   return cell === HOLE || CHEESE.includes(cell) ? '여기에는 놓을 수 없어요' : `🪙 ${placePrice(world)}이 필요해요`;
@@ -256,7 +340,7 @@ const whyNot = (cell: number) => {
 
 const hud = () => {
   $('wave').textContent = `${Math.max(1, world.wave)}/${FINAL_ROUND}`;
-  $('gold').textContent = String(world.gold);
+  $('gold').textContent = goldText(world.gold);
   $('slices').textContent = `${world.plate + world.drops.reduce((n, d) => n + d.n, 0) + world.mice.reduce((n, m) => n + m.carry, 0)}/${SLICES}`;
 };
 
@@ -444,8 +528,8 @@ const resultImage = () => {
     g.font = font(900, 38);
     g.fillText(`× ${n}`, x, y + 82);
   });
-  g.fillStyle = '#8d7462';
-  g.font = font(700, 32);
+  g.fillStyle = '#b8a493';
+  g.font = font(400, 28);
   g.fillText('play-box.cloud/cheese-guard', W / 2, H - 100);
   return new Promise<Blob | null>((resolve) => {
     c.toBlob(resolve, 'image/png');
@@ -484,6 +568,7 @@ const shareResult = async () => {
 
 const end = () => {
   ended = true;
+  gameEnd(world.status === 'clear' ? 'clear' : 'over');
   const best = Number(read(BEST_KEY)) || 0;
   const record = world.wave > best;
   if (record) {
@@ -492,7 +577,9 @@ const end = () => {
   const hero = make('img', 'hero') as HTMLImageElement;
   hero.alt = '';
   if (world.status === 'clear') {
-    hero.src = CAT_IMG.a3.src;
+    // 최후의 대장쥐를 밟고 왕관을 빼앗은 승리 그림
+    hero.src = '/cheese-guard/cat-win.png';
+    hero.classList.add('win');
     const share = make('button', 'ghost', MOBILE ? '공유하기' : '결과 이미지 저장');
     share.addEventListener('click', () => {
       void shareResult();
@@ -530,7 +617,7 @@ const showReady = () => {
     ['빈 바닥', '고양이 놓기 (놓을수록 값이 올라요)'],
     ['고양이', '치즈냥·뚱냥·졸린냥으로 키우기, 팔기'],
     ['생쥐', '고양이를 뛰어넘어 와서 치즈를 들고 도망쳐요. 행동대장쥐는 2조각, 대장쥐는 3조각'],
-    ['떨어진 치즈', '도망치던 생쥐를 잡으면 떨어져요. 8초 뒤 접시로 돌아가요'],
+    ['떨어진 치즈', '도망치던 생쥐를 잡으면 떨어져요. 8초 뒤나 라운드가 끝나면 접시로 돌아가요'],
     ['목표', `${FINAL_ROUND}라운드 최후의 대장쥐를 잡으면 클리어. 놓치면 바로 져요`],
   ]) {
     const li = make('li', '');
@@ -538,6 +625,8 @@ const showReady = () => {
     tips.append(li);
   }
   const best = Number(read(BEST_KEY)) || 0;
+  code = null;
+  codeEl = make('p', 'code', '');
   showCard(
     hero,
     make('h2', 'title', '치즈 8조각을 지켜 주세요'),
@@ -545,14 +634,71 @@ const showReady = () => {
     tips,
     button('시작하기', () => {
       paused = false;
+      gameStart('cheese-guard', () => ({ round: Math.max(1, world.wave) }));
       overlayEl.hidden = true;
       overlayEl.replaceChildren();
     }),
+    codeEl,
   );
 };
 
+// 테스트용 숨은 코드: 시작 화면에서 '+'를 누르면 카드 아래에 입력 줄이 생기고, DEV_CODE를 치면
+// 돈을 무한으로 들고 '+dev' 뒤에 붙인 라운드(+dev48 → 48라운드) 직전으로 건너뛴다. 「준비 완료」를 누르면 그 라운드가 시작된다
+const DEV_CODE = /^\+dev(\d{1,2})$/;
+let code: string | null = null;
+let codeEl: HTMLElement | null = null;
+// 개발자 점프로 갈 라운드, 0이면 점프하지 않은 판
+let devRound = 0;
+const devPrep = () => {
+  return devRound > 0 && world.wave === devRound - 1 && !world.toSpawn && !world.mice.length;
+};
+const devJump = (round: number) => {
+  world.wave = round - 1;
+  world.gold = Infinity;
+  // 보통 판이면 앞 라운드들을 지나며 등급 시계가 라운드마다 1쯤 돈다
+  world.tierClock = round;
+  world.waveCd = Infinity;
+  devRound = round;
+  paused = false;
+  overlayEl.hidden = true;
+  overlayEl.replaceChildren();
+  refreshPanel();
+};
+const typeCode = (e: KeyboardEvent) => {
+  e.preventDefault();
+  if (code === null) {
+    code = '+';
+  } else if (e.key === 'Enter') {
+    // '+dev' 뒤에 붙인 1~50 라운드로 간다
+    const round = Number(code.toLowerCase().match(DEV_CODE)?.[1]);
+    if (round >= 1 && round <= FINAL_ROUND) {
+      devJump(round);
+    }
+    code = null;
+  } else if (e.key === 'Escape') {
+    code = null;
+  } else if (e.key === 'Backspace') {
+    code = code.length > 1 ? code.slice(0, -1) : null;
+  } else if (code.length < 8) {
+    // 한글 입력 상태여도 'dev'가 쳐지게 실제 눌린 자판으로 읽는다
+    const ch = /^Key[A-Z]$/.test(e.code) ? e.code.slice(3).toLowerCase() : /^Digit\d$/.test(e.code) ? e.code.slice(5) : e.key;
+    if (ch.length === 1) {
+      code += ch;
+    }
+  }
+  if (codeEl) {
+    codeEl.textContent = code ?? '';
+  }
+};
+window.addEventListener('keydown', (e) => {
+  if (codeEl?.isConnected && (code !== null || e.key === '+')) {
+    typeCode(e);
+  }
+});
+
 const start = () => {
   world = createWorld();
+  devRound = 0;
   paused = true;
   played = 0;
   setHeld(false);
@@ -564,7 +710,8 @@ const start = () => {
 
 const loop = (ts: number) => {
   const real = Math.min(0.1, (ts - (last || ts)) / 1000);
-  acc += real * speed;
+  // 대비 시간은 배속과 상관없이 실제 10초
+  acc += real * (finalWarning(world) ? 1 : speed);
   if (!paused && !held && world.status === 'playing') {
     played += real;
   }
@@ -594,7 +741,16 @@ const cellOf = (e: PointerEvent) => {
 };
 
 canvas.addEventListener('pointerdown', (e) => {
-  if (paused || world.status !== 'playing') {
+  // 일시정지 중에는 놓기·키우기·팔기 모두 막는다
+  if (paused || held || world.status !== 'playing') {
+    return;
+  }
+  const r = canvas.getBoundingClientRect();
+  const x = ((e.clientX - r.left) / r.width) * SIZE;
+  const y = ((e.clientY - r.top) / r.height) * SIZE;
+  const [bx, by, bw, bh] = READY_BTN;
+  if (devPrep() && x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+    world.waveCd = 0;
     return;
   }
   const cell = cellOf(e);
@@ -620,6 +776,11 @@ $('speed').addEventListener('click', () => {
 });
 const setHeld = (on: boolean) => {
   held = on;
+  // 고른 고양이를 놓아 키우기·팔기 버튼도 사라지게 한다
+  if (on) {
+    selected = -1;
+    renderPanel();
+  }
   $('pause').textContent = on ? '▶' : '⏸';
   $('pause').setAttribute('aria-label', on ? '계속하기' : '일시정지');
 };

@@ -1,5 +1,5 @@
 // Run: yarn check — fails if placement rules, paths, stealing, drops, upgrades or the auto-play loop break.
-import { auraOf, boost, canPlace, CARRY, CATS, CELL, CHEESE, CHEESE_X, CHEESE_Y, COLS, createWorld, cx, cy, dmgBoost, FINAL_ROUND, HOLE, place, placePrice, MAX_BOOST, ROUND_TIME, slowFor, ROWS, sell, SLICES, statsOf, step, tierFor, tierStep, upgrade } from './sim.ts';
+import { auraOf, boost, canPlace, CARRY, CATS, CELL, CHEESE, CHEESE_X, CHEESE_Y, COLS, createWorld, cx, cy, dmgBoost, FINAL_ROUND, FINAL_WARN, finalWarning, goldText, HOLE, place, placePrice, MAX_BOOST, ROUND_TIME, slowFor, ROWS, sell, SLICES, statsOf, step, tierFor, tierStep, upgrade } from './sim.ts';
 
 import type { CatKind, World } from './sim.ts';
 
@@ -302,6 +302,23 @@ for (const wave of [FINAL_ROUND - 10, FINAL_ROUND]) {
   assert(w.wave === FINAL_ROUND && w.mice.length === 1 && w.mice[0].kind === 2 && !w.toSpawn, 'only the final boss comes in the last round');
 }
 
+// 49라운드를 끝내면 최후의 대장쥐가 나오기 전에 10초 대비 시간을 준다
+{
+  const w = createWorld();
+  w.wave = FINAL_ROUND - 1;
+  w.roundStart = 0;
+  step(w, DT);
+  assert(finalWarning(w) && w.waveCd === FINAL_WARN, 'final warning starts');
+  for (let i = 0; i < (FINAL_WARN - 0.5) / DT; i++) {
+    step(w, DT);
+  }
+  assert(w.wave === FINAL_ROUND - 1 && finalWarning(w), 'boss waits during the warning');
+  for (let i = 0; i < 1 / DT; i++) {
+    step(w, DT);
+  }
+  assert(w.wave === FINAL_ROUND && !finalWarning(w), 'boss comes after the warning');
+}
+
 // 한 번에 훔쳐 가는 양: 생쥐 1, 행동대장쥐 2, 대장쥐 3. 남은 게 적으면 있는 만큼만
 for (const kind of [0, 1, 2] as const) {
   const w = createWorld();
@@ -359,6 +376,12 @@ for (let seed = 1; seed <= 10; seed++) {
   assert(JSON.stringify(a) === JSON.stringify(b), `seed ${seed}: same seed must give the same game`);
   waves.push(a.wave);
 }
+
+// HUD 골드: 네 자리까지 그대로, 다섯 자리부터 천 단위 버림 K, 무한은 ∞
+assert(goldText(9999) === '9999', 'gold 4 digits as is');
+assert(goldText(10000) === '10K', 'gold 5 digits as K');
+assert(goldText(12999) === '12K', 'gold K rounds down');
+assert(goldText(Infinity) === '∞', 'gold infinite');
 
 console.log(`cheese-guard ok: placement anywhere, jump-over path, carry 1/2/3, upgrades, stealing, drops, 10 auto games`);
 // 참고용: 치즈 근처에 무작위로 놓고 키우는 자동 플레이가 버틴 라운드. 난이도 곡선을 볼 때 쓴다
