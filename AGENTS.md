@@ -6,7 +6,7 @@
 ## 이 저장소의 전제
 
 PlayBox(<https://play-box.cloud>)는 브라우저 미니 게임 모음입니다.
-Vite 멀티 페이지와 TypeScript만 씁니다. 런타임 의존성이 없습니다.
+Vite 멀티 페이지와 TypeScript만 씁니다. 런타임 의존성은 three, @dimforge/rapier3d-compat(와르르 맨션)와 lottie-web(Cheese Guard)뿐입니다.
 
 ## 구조
 
@@ -41,7 +41,7 @@ public/<게임>/           게임 에셋과 게임 소개 페이지
 
 ## 하지 말 것
 
-- 런타임 의존성 추가
+- 위 세 개 외의 런타임 의존성 추가
 - 요청하지 않은 주석 추가
 - 여러 목적을 한 커밋에 몰아넣기
 - 요청 범위를 넘는 리팩터링
