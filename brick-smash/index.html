@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>와장창 벽돌깨기 - 공을 튕겨 벽돌을 모두 부수세요</title>
+    <meta name="description" content="패들로 공을 튕겨 벽돌을 와장창 부수는 게임. 단단한 벽돌과 강철 벽돌, 넓은 패들·멀티볼·느린 공·생명 아이템, 6개 스테이지와 콤보 보너스." />
+    <link rel="canonical" href="https://play-box.cloud/brick-smash/" />
+    <meta name="google-adsense-account" content="ca-pub-3773338858328945" />
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3773338858328945" crossorigin="anonymous"></script>
+    <link rel="icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PlayBox" />
+    <meta property="og:url" content="https://play-box.cloud/brick-smash/" />
+    <meta property="og:title" content="와장창 벽돌깨기 - 공을 튕겨 벽돌을 모두 부수세요" />
+    <meta property="og:description" content="패들로 공을 튕겨 벽돌을 와장창 부수는 게임" />
+    <meta property="og:image" content="https://play-box.cloud/default-og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      :root { --bg: #17183a; --panel: #23255a; --line: #3a3d80; --ink: #fdf8ee; --muted: #a9acd6; --accent: #ffd23f; --hot: #ff5d73; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; overflow-x: clip; background: var(--bg); color: var(--ink); font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+      body { background: radial-gradient(90% 60% at 50% 30%, #2b2d6e, transparent 70%) fixed, var(--bg); min-height: 100vh; }
+      main { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 0 auto; padding: 50px 16px 16px; }
+      .hud { display: flex; align-items: center; gap: 10px; width: var(--w, 100%); font-weight: 800; font-variant-numeric: tabular-nums; }
+      .hud .stat { display: flex; flex-direction: column; line-height: 1.1; }
+      .hud small { font-size: 10px; color: var(--muted); font-weight: 700; letter-spacing: 0.05em; }
+      .hud b { font-size: 18px; }
+      .hud .score b { color: var(--accent); }
+      .hud .lives { margin-left: auto; color: var(--hot); font-size: 16px; letter-spacing: 1px; }
+      button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+      .pause { width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); font-size: 14px; font-weight: 900; }
+      .pause:active { transform: translateY(1px); }
+      .wrap { position: relative; width: var(--w); height: var(--h); border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 2px var(--line), 0 12px 30px rgba(0, 0, 0, 0.4); }
+      canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+      .overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; background: rgba(15, 16, 44, 0.78); }
+      .overlay[hidden] { display: none; }
+      .overlay h2 { margin: 0; font-size: 30px; font-weight: 900; color: var(--accent); text-shadow: 0 3px 0 #b5481f; }
+      .overlay p { margin: 0; color: var(--muted); font-size: 14px; white-space: pre-line; }
+      .overlay .big { color: var(--ink); font-size: 18px; font-weight: 800; }
+      .go { margin-top: 8px; padding: 13px 34px; border: 0; border-radius: 14px; background: var(--accent); color: #3a2400; font-size: 18px; font-weight: 900; box-shadow: 0 4px 0 #c08a00; }
+      .go:active { transform: translateY(3px); box-shadow: 0 1px 0 #c08a00; }
+      .help { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
+      .home { position: fixed; top: 10px; left: 12px; z-index: 1; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 85%, transparent); color: var(--ink); font-size: 14px; font-weight: 800; text-decoration: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); -webkit-tap-highlight-color: transparent; }
+      .home:active { transform: translateY(1px); }
+      .links { position: fixed; top: 8px; right: 12px; font: 11px/1.4 -apple-system, sans-serif; }
+      .links a { color: var(--muted); text-decoration: none; }
+    </style>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-51QVNWMBXH"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-51QVNWMBXH');
+    </script>
+  </head>
+  <body>
+    <main>
+      <div class="hud" id="hud">
+        <div class="stat score"><small>점수</small><b id="score">0</b></div>
+        <div class="stat"><small>최고</small><b id="best">0</b></div>
+        <div class="stat"><small>스테이지</small><b id="stage">1</b></div>
+        <div class="lives" id="lives"></div>
+        <button class="pause" id="pause" type="button" aria-label="일시정지">II</button>
+      </div>
+      <div class="wrap" id="wrap">
+        <canvas id="cv"></canvas>
+        <div class="overlay" id="overlay">
+          <h2 id="ovTitle">와장창 벽돌깨기</h2>
+          <p class="big" id="ovBig"></p>
+          <p id="ovText">화면을 좌우로 끌어 패들을 움직이고
+탭하면 공이 발사됩니다.
+PC는 ← → 또는 A D, 스페이스로 발사.</p>
+          <button class="go" id="ovBtn" type="button">시작하기</button>
+        </div>
+      </div>
+      <p class="help">패들 끝에 맞을수록 비스듬히 튀어요 · 회색 강철은 안 깨져요</p>
+    </main>
+    <a class="home" href="/">← 홈으로</a>
+    <nav class="links"><a href="/privacy/">개인정보처리방침</a></nav>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
