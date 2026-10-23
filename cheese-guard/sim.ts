@@ -5,6 +5,8 @@ export const CELL = 100;
 export const SLICES = 8;
 // 이 라운드까지 버티면 클리어
 export const FINAL_ROUND = 50;
+// 마지막 라운드 직전에 주는 대비 시간(초)
+export const FINAL_WARN = 10;
 // 쥐구멍은 위쪽 벽, 치즈는 오른쪽 아래 2×2 칸. 쥐는 고양이를 뛰어넘어 곧장 다녀서, 고양이로 길을 막을 수 없다
 export const HOLE = 1;
 export const CHEESE = [9 + 9 * COLS, 10 + 9 * COLS, 9 + 10 * COLS, 10 + 10 * COLS];
@@ -424,6 +426,11 @@ const pickTarget = (w: World, cat: Cat, range: number) => {
   return best;
 };
 
+// 마지막 라운드 직전, 최후의 대장쥐를 기다리는 대비 시간인가
+export const finalWarning = (w: World) => {
+  return w.status === 'playing' && w.wave === FINAL_ROUND - 1 && !w.toSpawn && !w.mice.length;
+};
+
 export const step = (w: World, dt: number) => {
   if (w.status !== 'playing') {
     return;
@@ -547,6 +554,9 @@ export const step = (w: World, dt: number) => {
   if (w.roundStart >= 0 && !w.toSpawn && !w.mice.length) {
     w.tierClock += tierStep(w.wave, w.time - w.roundStart);
     w.roundStart = -1;
+    if (w.wave === FINAL_ROUND - 1) {
+      w.waveCd = FINAL_WARN;
+    }
     // 라운드가 끝나면 바닥에 남은 조각은 다음 라운드 전에 곧바로 접시로 돌아간다
     for (const drop of w.drops) {
       w.plate += drop.n;
@@ -559,4 +569,12 @@ export const step = (w: World, dt: number) => {
   } else if (w.wave >= FINAL_ROUND && !w.toSpawn && !w.mice.length) {
     w.status = 'clear';
   }
+};
+
+// 다섯 자리부터는 천 단위로 버려 K로 줄인다(12,345 → 12K). 좁은 화면에서 HUD가 넘치지 않게
+export const goldText = (gold: number) => {
+  if (!Number.isFinite(gold)) {
+    return '∞';
+  }
+  return gold < 10000 ? String(gold) : `${Math.floor(gold / 1000)}K`;
 };
