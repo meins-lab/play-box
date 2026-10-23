@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>와르르 맨션 - 나무블록을 빼서 위에 올리는 3D 게임</title>
+    <meta name="description" content="엇갈려 쌓은 나무블록 탑에서 블록을 하나씩 빼서 맨 위에 올리는 3D 게임. 탑이 무너지기 전까지 몇 개나 옮길 수 있을까요?" />
+    <link rel="canonical" href="https://play-box.cloud/waruru-mansion/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PlayBox" />
+    <meta property="og:url" content="https://play-box.cloud/waruru-mansion/" />
+    <meta property="og:title" content="와르르 맨션 - 무너지기 전에 몇 개나 옮길까" />
+    <meta property="og:description" content="나무블록 탑에서 블록을 빼서 맨 위에 올리는 3D 게임" />
+    <meta property="og:image" content="https://play-box.cloud/waruru-mansion/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <style>
+      :root { --bg: #fbf1e3; --ink: #4a3423; --muted: #9a826c; --panel: #fffaf2; --accent: #e08a3c; --bad: #d9534f; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; color: var(--ink); font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+      body { background: radial-gradient(120% 80% at 50% 30%, #fffaf0, #f6e2c8 70%, #e9cba6); }
+      canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+      .hud { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; pointer-events: none; }
+      .hud div { min-width: 92px; padding: 6px 12px; border-radius: 12px; background: color-mix(in srgb, var(--panel) 88%, transparent); box-shadow: 0 2px 10px rgba(80, 50, 20, 0.12); text-align: center; }
+      .hud b { display: block; font-size: 22px; font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; }
+      .hud span { font-size: 11px; color: var(--muted); font-weight: 700; }
+      .tip { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom)); left: 16px; right: 16px; margin: 0; text-align: center; color: var(--muted); font-size: 13px; font-weight: 700; pointer-events: none; }
+      .toast { position: fixed; top: 120px; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px; background: rgba(74, 52, 35, 0.88); color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+      .toast.on { opacity: 1; }
+      .over { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(60, 40, 20, 0.35); }
+      .over[hidden] { display: none; }
+      .card { width: min(86vw, 320px); padding: 24px 20px 18px; border-radius: 20px; background: var(--panel); text-align: center; box-shadow: 0 10px 40px rgba(60, 40, 20, 0.3); }
+      .card h2 { margin: 0 0 6px; font-size: 26px; font-weight: 900; }
+      .card p { margin: 0 0 16px; color: var(--muted); font-weight: 700; }
+      .card button { width: 100%; padding: 14px; border: 0; border-radius: 14px; background: var(--accent); color: #fff; font: inherit; font-size: 17px; font-weight: 900; cursor: pointer; }
+      .ctrl { position: fixed; bottom: calc(52px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+      .ctrl[hidden] { display: none; }
+      .ctrl button { display: flex; flex-direction: column; align-items: center; min-width: 52px; padding: 8px 10px 6px; border: 0; border-radius: 14px; background: var(--panel); color: var(--ink); font: inherit; font-size: 20px; font-weight: 900; line-height: 1.1; box-shadow: 0 3px 10px rgba(80, 50, 20, 0.18); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+      .ctrl button small { font-size: 10px; color: var(--muted); font-weight: 700; }
+      .ctrl .drop { background: var(--accent); color: #fff; font-size: 15px; }
+      .ctrl .drop small { color: rgba(255, 255, 255, 0.8); }
+      .loading { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); font-weight: 700; }
+      .home { position: fixed; top: 10px; left: 12px; z-index: 1; padding: 8px 14px; border-radius: 999px; background: var(--panel); color: var(--ink); font-size: 14px; font-weight: 800; text-decoration: none; box-shadow: 0 2px 8px rgba(80, 50, 20, 0.15); -webkit-tap-highlight-color: transparent; }
+      .links { position: fixed; top: 8px; right: 12px; font: 11px/1.4 -apple-system, sans-serif; }
+      .links a { color: var(--muted); text-decoration: none; }
+    </style>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-51QVNWMBXH"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-51QVNWMBXH');
+    </script>
+  </head>
+  <body>
+    <div class="loading" id="loading">불러오는 중…</div>
+    <div class="hud">
+      <div><b id="score">0</b><span>옮긴 블록</span></div>
+      <div><b id="best">0</b><span>최고 기록</span></div>
+    </div>
+    <p class="tip" id="tip">블록을 끌어서 빼세요 · 빈 곳을 끌면 시점이 돌아가요</p>
+    <div class="ctrl" id="ctrl" hidden>
+      <button data-key="a">↺<small>A</small></button>
+      <button data-key="d">↻<small>D</small></button>
+      <button data-key="w">⤴<small>W</small></button>
+      <button data-key="s">⤵<small>S</small></button>
+      <button class="drop" data-key=" ">내려놓기<small>Space</small></button>
+    </div>
+    <div class="toast" id="toast"></div>
+    <div class="over" id="over" hidden>
+      <div class="card">
+        <h2>와르르!</h2>
+        <p id="result"></p>
+        <button id="again">다시 쌓기</button>
+      </div>
+    </div>
+    <a class="home" href="/">← 홈으로</a>
+    <nav class="links"><a href="/privacy/">개인정보처리방침</a></nav>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
