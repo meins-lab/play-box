@@ -1,4 +1,5 @@
 import { COLS, HOUSE_EXIT, MAZES, PLAYER_START, ROWS } from './maze.ts';
+import { gameEnd, gameStart } from '../shared/analytics.ts';
 
 type Dir = { x: number; y: number };
 type Mover = { x: number; y: number; dir: Dir };
@@ -199,6 +200,9 @@ const newGame = (startLevel = 1, auto = false) => {
   level = startLevel;
   fillDots();
   resetPositions();
+  if (!auto) {
+    gameStart('maze-escape', () => ({ level, score }));
+  }
 };
 
 const toTitle = () => {
@@ -514,12 +518,14 @@ const update = (dt: number) => {
   if (state === 'dying' && stateTime > 1.6) {
     if (lives <= 0) {
       setState('over');
+      gameEnd('over');
     } else {
       resetPositions();
     }
   }
   if (state === 'clear' && stateTime > 2 && (level === LAST_LEVEL || isHiddenRound())) {
     setState('ending');
+    gameEnd('clear');
   }
   if (state === 'clear' && stateTime > 2) {
     level++;
