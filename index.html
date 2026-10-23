@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PlayBox</title>
-    <meta name="description" content="설치 없이 브라우저에서 바로 즐기는 미니 게임 모음. 로봇청소기 미로 게임 Maze Escape를 지금 플레이하세요." />
+    <meta name="description" content="설치 없이 브라우저에서 바로 즐기는 미니 게임 모음. 미로, 퍼즐, 디펜스, 강화 게임을 PC와 스마트폰에서 무료로 플레이하세요." />
     <link rel="canonical" href="https://play-box.cloud/" />
     <meta name="google-adsense-account" content="ca-pub-3773338858328945" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3773338858328945" crossorigin="anonymous"></script>
@@ -37,7 +37,12 @@
               { "@type": "ListItem", "position": 2, "name": "Mole Patch", "url": "https://play-box.cloud/mole-patch/" },
               { "@type": "ListItem", "position": 3, "name": "Ant War", "url": "https://play-box.cloud/ant-war/" },
               { "@type": "ListItem", "position": 4, "name": "검 강화하기", "url": "https://play-box.cloud/sword/" },
-              { "@type": "ListItem", "position": 5, "name": "Cheese Guard", "url": "https://play-box.cloud/cheese-guard/" }
+              { "@type": "ListItem", "position": 5, "name": "Cheese Guard", "url": "https://play-box.cloud/cheese-guard/" },
+              { "@type": "ListItem", "position": 6, "name": "와르르 맨션", "url": "https://play-box.cloud/waruru-mansion/" },
+              { "@type": "ListItem", "position": 7, "name": "짝꿍 잇기", "url": "https://play-box.cloud/pair-link/" },
+              { "@type": "ListItem", "position": 8, "name": "방울방울", "url": "https://play-box.cloud/bubble-pop/" },
+              { "@type": "ListItem", "position": 9, "name": "와장창 벽돌깨기", "url": "https://play-box.cloud/brick-smash/" },
+              { "@type": "ListItem", "position": 10, "name": "말랑 합치기", "url": "https://play-box.cloud/jelly-merge/" }
             ]
           }
         ]
@@ -62,7 +67,19 @@
       .game div { padding: 12px 16px; }
       .game h2 { margin: 0 0 4px; padding: 0; border: 0; font-size: 18px; }
       .game p { margin: 0; color: var(--muted); font-size: 14px; }
+      .thumb { position: relative; display: block; }
+      .soon { cursor: not-allowed; }
+      .soon:hover { transform: none; }
+      .soon .thumb img { filter: grayscale(1); }
+      .soon .thumb span { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); color: #fff; font-size: 26px; font-weight: 800; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
     </style>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-51QVNWMBXH"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-51QVNWMBXH');
+    </script>
   </head>
   <body>
     <h1 class="banner">
@@ -122,6 +139,51 @@
             </div>
           </a>
           <a class="about" href="/cheese-guard/about/">게임 소개 →</a>
+        </article>
+        <article class="game">
+          <a href="/waruru-mansion/">
+            <img src="/waruru-mansion/og-image.jpg" alt="햇살 드는 거실 탁자 위에서 엇갈려 쌓은 나무블록 탑이 흔들리며 블록이 튀어나오는 장면" width="1200" height="630" />
+            <div>
+              <h2>와르르 맨션</h2>
+              <p>나무블록 탑에서 블록을 빼서 맨 위에 올리는 3D 게임</p>
+            </div>
+          </a>
+        </article>
+        <article class="game soon" aria-disabled="true">
+          <a>
+            <span class="thumb"><img src="/default-og.jpg" alt="뚜껑이 열린 금색 선물상자 캐릭터와 물음표" width="1200" height="630" /><span>출시예정</span></span>
+            <div>
+              <h2>짝꿍 잇기</h2>
+              <p>같은 그림 두 개를 꺾임 두 번 이내의 선으로 이어 지우는 퍼즐 게임</p>
+            </div>
+          </a>
+        </article>
+        <article class="game soon" aria-disabled="true">
+          <a>
+            <span class="thumb"><img src="/default-og.jpg" alt="뚜껑이 열린 금색 선물상자 캐릭터와 물음표" width="1200" height="630" /><span>출시예정</span></span>
+            <div>
+              <h2>방울방울</h2>
+              <p>같은 색 방울을 세 개 이상 붙여 터뜨리는 슈팅 퍼즐 게임</p>
+            </div>
+          </a>
+        </article>
+        <article class="game soon" aria-disabled="true">
+          <a>
+            <span class="thumb"><img src="/default-og.jpg" alt="뚜껑이 열린 금색 선물상자 캐릭터와 물음표" width="1200" height="630" /><span>출시예정</span></span>
+            <div>
+              <h2>와장창 벽돌깨기</h2>
+              <p>패들로 공을 튕겨 벽돌을 모두 깨는 아케이드 게임</p>
+            </div>
+          </a>
+        </article>
+        <article class="game soon" aria-disabled="true">
+          <a>
+            <span class="thumb"><img src="/default-og.jpg" alt="뚜껑이 열린 금색 선물상자 캐릭터와 물음표" width="1200" height="630" /><span>출시예정</span></span>
+            <div>
+              <h2>말랑 합치기</h2>
+              <p>같은 젤리끼리 밀어 합쳐 더 큰 젤리를 만드는 퍼즐 게임</p>
+            </div>
+          </a>
         </article>
       </section>
 
