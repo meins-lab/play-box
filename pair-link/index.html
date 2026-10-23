@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>짝꿍 잇기 - 같은 그림 두 개를 이어 지우는 퍼즐</title>
+    <meta name="description" content="같은 그림 두 개를 두 번 이하로 꺾이는 선으로 이어 지우는 퍼즐. 3단계 판을 가장 빨리 비워 보세요." />
+    <link rel="canonical" href="https://play-box.cloud/pair-link/" />
+    <meta name="google-adsense-account" content="ca-pub-3773338858328945" />
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3773338858328945" crossorigin="anonymous"></script>
+    <link rel="icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PlayBox" />
+    <meta property="og:url" content="https://play-box.cloud/pair-link/" />
+    <meta property="og:title" content="짝꿍 잇기 - 같은 그림 두 개를 이어 지우는 퍼즐" />
+    <meta property="og:description" content="같은 그림 두 개를 선으로 이어 판을 비우는 퍼즐" />
+    <meta property="og:image" content="https://play-box.cloud/default-og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      :root { --bg: #f5efe3; --panel: #fffaf0; --line: #e2d6bd; --ink: #3b352d; --muted: #8a7f6d; --accent: #ff6b4a; --teal: #18a39a; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; overflow-x: clip; background: var(--bg); color: var(--ink); font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+      main { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 0 auto; padding: 50px 12px 20px; }
+      h1 { margin: 0; font-size: 22px; font-weight: 900; letter-spacing: 0.02em; }
+      .stages { display: flex; gap: 6px; }
+      button { font: inherit; cursor: pointer; color: inherit; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+      .stages button { padding: 5px 14px; border: 2px solid var(--line); border-radius: 999px; background: var(--panel); font-size: 13px; font-weight: 800; color: var(--muted); }
+      .stages button.on { border-color: var(--ink); background: var(--ink); color: var(--panel); }
+      .hud { display: flex; gap: 8px; width: 100%; max-width: 380px; }
+      .hud div { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 4px 0; border-radius: 12px; background: var(--panel); border: 2px solid var(--line); }
+      .hud span { font-size: 11px; font-weight: 700; color: var(--muted); }
+      .hud b { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
+      .board { padding: 4px; border-radius: 16px; background: #dbe8d4; border: 2px solid #c6d8bd; }
+      canvas { display: block; touch-action: manipulation; cursor: pointer; }
+      .controls { display: flex; gap: 8px; width: 100%; max-width: 380px; }
+      .controls button { flex: 1; padding: 11px 0; border: 2px solid var(--ink); border-radius: 14px; background: var(--panel); font-size: 15px; font-weight: 800; box-shadow: 0 3px 0 var(--ink); }
+      .controls button:active { transform: translateY(3px); box-shadow: none; }
+      .controls button:disabled { opacity: 0.4; cursor: default; transform: none; box-shadow: 0 3px 0 var(--ink); }
+      .controls .hint { background: #c9eee9; }
+      .rule { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
+      .toast { position: fixed; left: 50%; top: 42%; transform: translate(-50%, 20px); padding: 10px 18px; border-radius: 999px; background: var(--ink); color: var(--panel); font-size: 14px; font-weight: 700; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; }
+      .toast.show { opacity: 1; transform: translate(-50%, 0); }
+      .clear { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(59, 53, 45, 0.45); padding: 16px; }
+      .clear[hidden] { display: none; }
+      .card { width: min(320px, 100%); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 20px 20px; border-radius: 20px; background: var(--panel); border: 2px solid var(--ink); box-shadow: 0 6px 0 var(--ink); }
+      .card h2 { margin: 0; font-size: 24px; font-weight: 900; color: var(--accent); }
+      .card .t { font-size: 40px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.1; }
+      .card p { margin: 0 0 8px; font-weight: 700; color: var(--teal); }
+      .card .row { display: flex; gap: 8px; width: 100%; }
+      .card button { flex: 1; padding: 12px 0; border: 2px solid var(--ink); border-radius: 14px; background: var(--panel); font-size: 15px; font-weight: 800; }
+      .card .primary { background: var(--accent); color: #fff; }
+      .home { position: fixed; top: 10px; left: 12px; z-index: 1; padding: 8px 14px; border: 2px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font-size: 14px; font-weight: 800; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+      .home:active { transform: translateY(1px); }
+      .links { position: fixed; top: 8px; right: 12px; font: 11px/1.4 -apple-system, sans-serif; }
+      .links a { color: var(--muted); text-decoration: none; }
+    </style>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-51QVNWMBXH"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-51QVNWMBXH');
+    </script>
+  </head>
+  <body>
+    <a class="home" href="/">← 홈으로</a>
+    <nav class="links"><a href="/privacy/">개인정보처리방침</a></nav>
+    <main>
+      <h1>짝꿍 잇기</h1>
+      <div class="stages">
+        <button type="button">1단계</button>
+        <button type="button">2단계</button>
+        <button type="button">3단계</button>
+      </div>
+      <div class="hud">
+        <div><span>시간</span><b id="time">0:00</b></div>
+        <div><span>최고 기록</span><b id="best">-</b></div>
+        <div><span>남은 타일</span><b id="left">0</b></div>
+      </div>
+      <div class="board"><canvas id="board"></canvas></div>
+      <div class="controls">
+        <button type="button" class="hint" id="hint">힌트 +10초</button>
+        <button type="button" id="shuffle">섞기 3</button>
+        <button type="button" id="restart">새 판</button>
+      </div>
+      <p class="rule">같은 그림 두 개를 두 번 이하로 꺾이는 선으로 이으면 사라져요</p>
+    </main>
+    <div class="toast" id="toast" role="status"></div>
+    <div class="clear" id="clear" hidden>
+      <div class="card">
+        <h2>클리어!</h2>
+        <div class="t" id="clear-time">0:00</div>
+        <p id="clear-best"></p>
+        <div class="row">
+          <button type="button" id="again">다시 하기</button>
+          <button type="button" class="primary" id="next">다음 단계</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>방울방울 - 같은 색 방울을 쏘아 터뜨리는 퍼즐</title>
+    <meta name="description" content="같은 색 방울 세 개를 이어 붙여 터뜨리는 버블 슈터. 벽에 튕겨 조준하고, 천장이 내려오기 전에 판을 비우세요." />
+    <link rel="canonical" href="https://play-box.cloud/bubble-pop/" />
+    <meta name="google-adsense-account" content="ca-pub-3773338858328945" />
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3773338858328945" crossorigin="anonymous"></script>
+    <link rel="icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PlayBox" />
+    <meta property="og:url" content="https://play-box.cloud/bubble-pop/" />
+    <meta property="og:title" content="방울방울 - 같은 색 방울을 쏘아 터뜨리는 퍼즐" />
+    <meta property="og:description" content="같은 색 방울 세 개를 이어 터뜨리는 버블 슈터" />
+    <meta property="og:image" content="https://play-box.cloud/default-og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      :root { --bg: #2b2d4a; --panel: #383b5e; --line: #4d5180; --ink: #fbf8ff; --muted: #b9bbdb; --accent: #ffd36b; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; overflow-x: clip; color: var(--ink); font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+      body { min-height: 100vh; background: radial-gradient(90% 60% at 50% 20%, #45487a, transparent 70%) fixed, linear-gradient(#34365a, #1f2038) fixed; }
+      main { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 480px; margin: 0 auto; padding: 48px 16px 20px; }
+      h1 { margin: 0; font-size: 22px; font-weight: 900; letter-spacing: 0.06em; }
+      .hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: var(--board-w); }
+      .hud div { display: flex; flex-direction: column; align-items: center; padding: 5px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+      .hud span { font-size: 11px; font-weight: 700; color: var(--muted); }
+      .hud b { font-size: 19px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.2; }
+      .board { position: relative; width: var(--board-w); aspect-ratio: 320 / 520; }
+      main { --board-w: min(100%, 440px, calc((100svh - 190px) * 320 / 520)); }
+      canvas { display: block; width: 100%; height: 100%; border-radius: 18px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); touch-action: none; cursor: crosshair; }
+      .overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-radius: 18px; background: rgba(28, 29, 52, 0.78); text-align: center; }
+      .overlay[hidden] { display: none; }
+      .overlay h2 { margin: 0; font-size: 30px; font-weight: 900; color: var(--accent); }
+      .overlay p { margin: 0; color: var(--muted); }
+      button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+      .go { margin-top: 6px; padding: 13px 34px; border: 0; border-radius: 999px; background: linear-gradient(#ffe08f, #ffbf3f); color: #4a2f00; font-size: 18px; font-weight: 900; box-shadow: 0 4px 0 #b9821c; touch-action: manipulation; }
+      .go:active { transform: translateY(3px); box-shadow: 0 1px 0 #b9821c; }
+      .hint { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
+      .home { position: fixed; top: 10px; left: 12px; z-index: 1; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 85%, transparent); color: var(--ink); font-size: 14px; font-weight: 800; text-decoration: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); -webkit-tap-highlight-color: transparent; }
+      .home:active { transform: translateY(1px); }
+      .links { position: fixed; top: 8px; right: 12px; font: 11px/1.4 -apple-system, sans-serif; }
+      .links a { color: var(--muted); text-decoration: none; }
+    </style>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-51QVNWMBXH"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-51QVNWMBXH');
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>방울방울</h1>
+      <div class="hud">
+        <div><span>단계</span><b id="stage">1</b></div>
+        <div><span>점수</span><b id="score">0</b></div>
+        <div><span>최고</span><b id="best">0</b></div>
+      </div>
+      <div class="board">
+        <canvas id="canvas"></canvas>
+        <div class="overlay" id="overlay" hidden>
+          <h2 id="overlay-title"></h2>
+          <p id="overlay-text"></p>
+          <button class="go" id="overlay-btn" type="button"></button>
+        </div>
+      </div>
+      <p class="hint">끌어서 조준하고 놓으면 발사 · 발사대를 누르면 다음 방울과 교체</p>
+    </main>
+    <a class="home" href="/" id="home">← 홈으로</a>
+    <nav class="links"><a href="/privacy/">개인정보처리방침</a></nav>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
